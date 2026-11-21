@@ -15,8 +15,11 @@ class LocalNotificationService {
       FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
+  bool get _isSupportedMobile =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
   Future<void> initialize() async {
-    if (_isInitialized || kIsWeb) return;
+    if (_isInitialized || !_isSupportedMobile) return;
     try {
       tz.initializeTimeZones();
       try {
@@ -34,7 +37,7 @@ class LocalNotificationService {
   }
 
   Future<bool> requestPermissions() async {
-    if (kIsWeb) return false;
+    if (!_isSupportedMobile) return false;
     await initialize();
     try {
       final androidPlugin = _plugin
@@ -58,7 +61,7 @@ class LocalNotificationService {
   }
 
   Future<void> cancelReminderNotifications(String reminderId) async {
-    if (!_isInitialized || kIsWeb) return;
+    if (!_isInitialized || !_isSupportedMobile) return;
     final baseId = _baseNotificationId(reminderId);
     try {
       for (int i = 0; i < 8; i++) {
@@ -71,7 +74,7 @@ class LocalNotificationService {
     ScheduledReminderModel reminder, {
     String? plotName,
   }) async {
-    if (kIsWeb) return;
+    if (!_isSupportedMobile) return;
     await initialize();
     if (!_isInitialized) return;
 
@@ -151,7 +154,7 @@ class LocalNotificationService {
     List<ScheduledReminderModel> reminders,
     String? Function(String? plotId) plotNameResolver,
   ) async {
-    if (kIsWeb) return;
+    if (!_isSupportedMobile) return;
     await initialize();
     if (!_isInitialized) return;
     for (final r in reminders) {

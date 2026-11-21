@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../widgets/app_form_dialogs.dart';
 import '../widgets/tanijagung_widgets.dart';
+import '../widgets/ui_kit.dart';
 import 'expenses_screen.dart';
 import 'seed_fertilizer_screen.dart';
 
@@ -240,85 +241,97 @@ class _ActivitiesScreenState extends State<ActivitiesScreen> {
               const SizedBox(height: 10),
 
               if (displayEvents.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(18),
-                    child: Text(
-                      'Belum ada kegiatan pertanian tercatat. Tekan tombol "+ Tambah Aktivitas" untuk mencatat jadwal penanaman, pemupukan pertama/kedua, penyemprotan, perawatan, atau panen.',
-                      style: TextStyle(color: AppTheme.textSecondary),
-                    ),
+                SoftCard(
+                  radius: AppRadius.xl,
+                  child: CornEmptyState(
+                    illustrationSize: 96,
+                    title: 'Belum Ada Kegiatan Tercatat',
+                    message: 'Tekan tombol "+ Tambah Aktivitas" untuk mencatat jadwal penanaman, pemupukan, penyemprotan, perawatan, atau panen.',
                   ),
                 )
               else
-                ...displayEvents.map((act) {
+                ...List.generate(displayEvents.length, (idx) {
+                  final act = displayEvents[idx];
                   final plot = service.getPlotById(act.plotId);
                   final cycle = service.getCycleById(act.cycleId);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Card(
-                      child: ListTile(
-                        onTap: () => service.toggleActivityCompleted(
-                          act.id,
-                          !act.isCompleted,
-                        ),
-                        leading: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: act.isCompleted
-                                ? AppTheme.primaryDarkGreen
-                                : AppTheme.lightLeafGreen,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            act.isCompleted
-                                ? Icons.check_rounded
-                                : Icons.eco_rounded,
-                            color: act.isCompleted
-                                ? Colors.white
-                                : AppTheme.primaryDarkGreen,
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          act.name,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            decoration: act.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${AppFormatters.date(act.date)} • ${act.activityType} • ${plot?.name ?? "-"} (${cycle?.name ?? "-"})',
-                          style: const TextStyle(fontSize: 12.5),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Edit Aktivitas',
-                              icon: const Icon(
-                                Icons.edit_outlined,
-                                size: 20,
-                                color: AppTheme.textSecondary,
+                    child: StaggeredEntrance(
+                      index: idx,
+                      child: SwipeToDeleteWrapper(
+                        dismissKey: ValueKey('act_${act.id}'),
+                        onDelete: () => service.deleteActivity(act.id),
+                        child: SoftCard(
+                          radius: AppRadius.lg,
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: ListTile(
+                            onTap: () => service.toggleActivityCompleted(
+                              act.id,
+                              !act.isCompleted,
+                            ),
+                            leading: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: act.isCompleted
+                                    ? AppTheme.primaryDarkGreen
+                                    : AppTheme.lightLeafGreen,
+                                shape: BoxShape.circle,
                               ),
-                              onPressed: () => AppFormDialogs.showActivityForm(
-                                context,
-                                existingActivity: act,
+                              child: Icon(
+                                act.isCompleted
+                                    ? Icons.check_rounded
+                                    : Icons.eco_rounded,
+                                color: act.isCompleted
+                                    ? Colors.white
+                                    : AppTheme.primaryDarkGreen,
+                                size: 20,
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'Hapus Aktivitas',
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                size: 20,
-                                color: AppTheme.dangerRed,
+                            title: Text(
+                              act.name,
+                              style: TextStyle(
+                                fontFamily: AppTheme.headingFont,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                decoration: act.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
                               ),
-                              onPressed: () => service.deleteActivity(act.id),
                             ),
-                          ],
+                            subtitle: Text(
+                              '${AppFormatters.date(act.date)} • ${act.activityType} • ${plot?.name ?? "-"} (${cycle?.name ?? "-"})',
+                              style: const TextStyle(fontSize: 12.5),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit Aktivitas',
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                  onPressed: () =>
+                                      AppFormDialogs.showActivityForm(
+                                        context,
+                                        existingActivity: act,
+                                      ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Hapus Aktivitas',
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                    color: AppTheme.dangerRed,
+                                  ),
+                                  onPressed: () =>
+                                      service.deleteActivity(act.id),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),

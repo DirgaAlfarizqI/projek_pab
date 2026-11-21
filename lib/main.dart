@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/theme/app_theme.dart';
@@ -25,6 +28,10 @@ class TaniJagungApp extends StatelessWidget {
       title: 'TaniJagung',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      // Dark theme sudah disiapkan; mode gelap diaktifkan bertahap setelah
+      // seluruh layar memakai warna semantik (AppColors) agar kontras aman.
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.light,
       home: const AppRootFlow(),
     );
   }
@@ -37,42 +44,100 @@ class AppRootFlow extends StatefulWidget {
   State<AppRootFlow> createState() => _AppRootFlowState();
 }
 
-class _AppRootFlowState extends State<AppRootFlow> {
+class _AppRootFlowState extends State<AppRootFlow>
+    with SingleTickerProviderStateMixin {
   bool _showSplash = true;
+  bool _revealing = false;
+  Future<void>? _bootFuture;
+  AnimationController? _revealCtrl;
+
+  AnimationController get _ensureRevealCtrl {
+    return _revealCtrl ??=
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 560),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed && mounted) {
+            setState(() {
+              _showSplash = false;
+              _revealing = false;
+            });
+          }
+        });
+  }
 
   @override
   void initState() {
     super.initState();
-    _bootApp();
-  }
-
-  Future<void> _bootApp() async {
-    await AppDataService().initialize();
-  }
-
-  void _handleSplashCompleted() {
-    if (!mounted || !_showSplash) return;
-    setState(() => _showSplash = false);
+    // Data dimuat di latar SELAMA animasi splash berjalan
+    _bootFuture = AppDataService().initialize();
+    _ensureRevealCtrl;
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (_showSplash) {
-      return SplashScreen(onCompleted: _handleSplashCompleted);
-    }
+  void dispose() {
+    _revealCtrl?.dispose();
+    super.dispose();
+  }
 
+  void _handleSplashCompleted() {
+    if (!mounted || !_showSplash || _revealing) return;
+    if (AppMotion.reduceMotion(context)) {
+      setState(() => _showSplash = false);
+      return;
+    }
+    setState(() => _revealing = true);
+    _ensureRevealCtrl.forward(from: 0);
+  }
+
+  Widget _buildMainFlow() {
     return ListenableBuilder(
       listenable: AppDataService(),
       builder: (context, _) {
         final service = AppDataService();
-        if (!service.hasSeenOnboarding) {
-          return SplashScreen(onCompleted: _handleSplashCompleted);
-        }
         if (!service.isLoggedIn) {
           return const AuthScreen();
         }
         return const MainNavigationShell();
       },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showSplash) return _buildMainFlow();
+
+    final ctrl = _ensureRevealCtrl;
+    final splash = SplashScreen(
+      onCompleted: _handleSplashCompleted,
+      bootFuture: _bootFuture,
+    );
+
+    // Transisi keluar: splash memudar & berlubang melingkar yang melebar
+    // (circular reveal) memperlihatkan halaman berikutnya di belakangnya.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_revealing) _buildMainFlow(),
+        IgnorePointer(
+          ignoring: _revealing,
+          child: AnimatedBuilder(
+            animation: ctrl,
+            builder: (context, child) {
+              if (!_revealing) return child!;
+              final t = Curves.easeInOutCubic.transform(ctrl.value);
+              return Opacity(
+                opacity: (1 - t * 0.85).clamp(0.0, 1.0),
+                child: ClipPath(
+                  clipper: CircularRevealHoleClipper(t),
+                  child: Transform.scale(scale: 1 + t * 0.08, child: child),
+                ),
+              );
+            },
+            child: splash,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -145,8 +210,13 @@ class _MainNavigationShellState extends State<MainNavigationShell>
 
   void _selectTab(int index) {
     if (index == _selectedIndex) return;
+    HapticFeedback.selectionClick();
     setState(() => _selectedIndex = index);
-    _pageAnimCtrl.forward(from: 0.0);
+    if (AppMotion.reduceMotion(context)) {
+      _pageAnimCtrl.value = 1.0;
+    } else {
+      _pageAnimCtrl.forward(from: 0.0);
+    }
   }
 
   @override
@@ -207,16 +277,13 @@ class _AnimatedBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final dur = AppMotion.of(context, AppMotion.medium);
+
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surfaceWhite,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        color: colors.surface,
+        boxShadow: AppShadows.navBar,
       ),
       child: SafeArea(
         top: false,
@@ -232,23 +299,23 @@ class _AnimatedBottomNavBar extends StatelessWidget {
               return Stack(
                 alignment: Alignment.centerLeft,
                 children: [
-                  // Pill Indikator Hijau Muda yang Bergeser Halus Antar Tab
+                  // Pill Indikator Hijau Muda yang Bergeser Mulus Antar Tab
                   AnimatedPositioned(
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeOutCubic,
+                    duration: dur,
+                    curve: AppMotion.standard,
                     left: pillLeft,
                     top: 9,
                     child: Container(
                       width: pillWidth,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: AppTheme.lightGreen,
+                        color: colors.accentTint,
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                   ),
 
-                  // Baris 5 Tab Navigasi
+                  // Baris 5 Tab Navigasi (Ikon aktif melenting 1.0 -> 1.15 -> 1.0 + label fade)
                   Row(
                     children: List.generate(tabs.length, (idx) {
                       final item = tabs[idx];
@@ -268,29 +335,35 @@ class _AnimatedBottomNavBar extends StatelessWidget {
                                   height: 30,
                                   child: Center(
                                     child: TweenAnimationBuilder<double>(
+                                      key: ValueKey<String>(
+                                        'nav_${idx}_$isSelected',
+                                      ),
                                       tween: Tween<double>(
-                                        begin: 1.0,
-                                        end: isSelected ? 1.14 : 1.0,
+                                        begin: 0.0,
+                                        end: isSelected ? 1.0 : 0.0,
                                       ),
-                                      duration: const Duration(
-                                        milliseconds: 260,
-                                      ),
-                                      curve: Curves.easeOutBack,
-                                      builder: (context, scale, child) {
+                                      duration: dur,
+                                      curve: AppMotion.standard,
+                                      builder: (context, t, child) {
+                                        // Melenting 1.0 -> 1.15 -> 1.0 saat dipilih
+                                        final bounce = isSelected
+                                            ? 1.0 + 0.15 * math.sin(t * math.pi)
+                                            : 1.0;
                                         return Transform.translate(
                                           offset: Offset(
                                             0,
-                                            isSelected ? -1.5 : 0.0,
+                                            isSelected ? -1.5 * t : 0.0,
                                           ),
                                           child: Transform.scale(
-                                            scale: scale,
+                                            scale: bounce,
                                             child: child,
                                           ),
                                         );
                                       },
                                       child: AnimatedSwitcher(
-                                        duration: const Duration(
-                                          milliseconds: 220,
+                                        duration: AppMotion.of(
+                                          context,
+                                          AppMotion.short,
                                         ),
                                         child: Icon(
                                           isSelected
@@ -300,29 +373,40 @@ class _AnimatedBottomNavBar extends StatelessWidget {
                                           size: 23,
                                           color: isSelected
                                               ? AppTheme.darkGreen
-                                              : AppTheme.textSecondary,
+                                              : colors.textSecondary,
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 2),
-                                AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOut,
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    color: isSelected
-                                        ? AppTheme.darkGreen
-                                        : AppTheme.textSecondary,
+                                AnimatedOpacity(
+                                  duration: AppMotion.of(
+                                    context,
+                                    AppMotion.short,
                                   ),
-                                  child: Text(
-                                    item.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  opacity: isSelected ? 1.0 : 0.78,
+                                  child: AnimatedDefaultTextStyle(
+                                    duration: AppMotion.of(
+                                      context,
+                                      AppMotion.short,
+                                    ),
+                                    curve: Curves.easeOut,
+                                    style: TextStyle(
+                                      fontFamily: AppTheme.bodyFont,
+                                      fontSize: 11.5,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? AppTheme.darkGreen
+                                          : colors.textSecondary,
+                                    ),
+                                    child: Text(
+                                      item.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ),
                               ],

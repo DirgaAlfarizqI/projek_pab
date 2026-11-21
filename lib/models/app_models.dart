@@ -25,7 +25,6 @@ class UserModel {
   final String preferredWeightUnit; // 'ton' atau 'kg'
   final bool notificationsEnabled;
   final String currencyCode; // 'IDR'
-  final String predictionApiUrl;
   final String? profilePhotoPath;
   final double initialCapital; // Modal Awal Usaha Tani di Dashboard Beranda
   final DateTime createdAt;
@@ -41,7 +40,6 @@ class UserModel {
     this.preferredWeightUnit = 'ton',
     this.notificationsEnabled = true,
     this.currencyCode = 'IDR',
-    this.predictionApiUrl = AppConstants.internalPredictionApiUrl,
     this.profilePhotoPath,
     this.initialCapital = 0.0,
     required this.createdAt,
@@ -57,7 +55,6 @@ class UserModel {
     String? preferredWeightUnit,
     bool? notificationsEnabled,
     String? currencyCode,
-    String? predictionApiUrl,
     String? profilePhotoPath,
     bool clearProfilePhoto = false,
     double? initialCapital,
@@ -73,7 +70,6 @@ class UserModel {
       preferredWeightUnit: preferredWeightUnit ?? this.preferredWeightUnit,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       currencyCode: currencyCode ?? this.currencyCode,
-      predictionApiUrl: predictionApiUrl ?? this.predictionApiUrl,
       profilePhotoPath: clearProfilePhoto
           ? null
           : (profilePhotoPath ?? this.profilePhotoPath),
@@ -93,7 +89,6 @@ class UserModel {
     'preferredWeightUnit': preferredWeightUnit,
     'notificationsEnabled': notificationsEnabled,
     'currencyCode': currencyCode,
-    'predictionApiUrl': predictionApiUrl,
     'profilePhotoPath': profilePhotoPath,
     'initialCapital': initialCapital,
     'created_at': createdAt.toIso8601String(),
@@ -110,8 +105,6 @@ class UserModel {
     preferredWeightUnit: map['preferredWeightUnit'] ?? 'ton',
     notificationsEnabled: map['notificationsEnabled'] ?? true,
     currencyCode: map['currencyCode'] ?? 'IDR',
-    predictionApiUrl:
-        map['predictionApiUrl'] ?? AppConstants.internalPredictionApiUrl,
     profilePhotoPath: map['profilePhotoPath'],
     initialCapital: (map['initialCapital'] as num?)?.toDouble() ?? 0.0,
     createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
@@ -1048,100 +1041,6 @@ class HarvestRecordModel {
     sellingPricePerKg: (map['selling_price_per_kg'] as num?)?.toDouble() ?? 0.0,
     notes: map['notes'] ?? '',
     isDemo: map['is_demo'] ?? false,
-    createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
-    updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
-  );
-}
-
-/// Entitas `predictions` (Riwayat Prediksi Hasil Panen ML)
-class PredictionModel {
-  final String id;
-  final String userId;
-  final String plotId;
-  final String cycleId;
-  final double areaHa;
-  final String cornVariety;
-  final double seedKg;
-  final double fertilizerKg;
-  final double? historicalAvgYieldTonsPerHa;
-  final double predictedYieldKg;
-  final double predictedYieldTons;
-  final double predictedYieldKgPerHa;
-  final String modelUsed; // 'Random Forest Regression' atau 'Linear Regression'
-  final double mae;
-  final double rmse;
-  final double r2Score;
-  final Map<String, dynamic>? comparisonMetrics;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  PredictionModel({
-    required this.id,
-    required this.userId,
-    required this.plotId,
-    required this.cycleId,
-    required this.areaHa,
-    required this.cornVariety,
-    required this.seedKg,
-    required this.fertilizerKg,
-    this.historicalAvgYieldTonsPerHa,
-    required this.predictedYieldKg,
-    required this.predictedYieldTons,
-    required this.predictedYieldKgPerHa,
-    required this.modelUsed,
-    required this.mae,
-    required this.rmse,
-    required this.r2Score,
-    this.comparisonMetrics,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'user_id': userId,
-    'plot_id': plotId,
-    'cycle_id': cycleId,
-    'area_ha': areaHa,
-    'corn_variety': cornVariety,
-    'seed_kg': seedKg,
-    'fertilizer_kg': fertilizerKg,
-    'historical_avg_yield_tons_per_ha': historicalAvgYieldTonsPerHa,
-    'predicted_yield_kg': predictedYieldKg,
-    'predicted_yield_tons': predictedYieldTons,
-    'predicted_yield_kg_per_ha': predictedYieldKgPerHa,
-    'model_used': modelUsed,
-    'mae': mae,
-    'rmse': rmse,
-    'r2_score': r2Score,
-    'comparison_metrics': comparisonMetrics,
-    'created_at': createdAt.toIso8601String(),
-    'updated_at': updatedAt.toIso8601String(),
-  };
-
-  factory PredictionModel.fromMap(Map<String, dynamic> map) => PredictionModel(
-    id: map['id'] ?? '',
-    userId: map['user_id'] ?? '',
-    plotId: map['plot_id'] ?? '',
-    cycleId: map['cycle_id'] ?? '',
-    areaHa: (map['area_ha'] as num?)?.toDouble() ?? 0.0,
-    cornVariety: map['corn_variety'] ?? '',
-    seedKg: (map['seed_kg'] as num?)?.toDouble() ?? 0.0,
-    fertilizerKg: (map['fertilizer_kg'] as num?)?.toDouble() ?? 0.0,
-    historicalAvgYieldTonsPerHa:
-        (map['historical_avg_yield_tons_per_ha'] as num?)?.toDouble(),
-    predictedYieldKg: (map['predicted_yield_kg'] as num?)?.toDouble() ?? 0.0,
-    predictedYieldTons:
-        (map['predicted_yield_tons'] as num?)?.toDouble() ?? 0.0,
-    predictedYieldKgPerHa:
-        (map['predicted_yield_kg_per_ha'] as num?)?.toDouble() ?? 0.0,
-    modelUsed: map['model_used'] ?? 'Random Forest Regression',
-    mae: (map['mae'] as num?)?.toDouble() ?? 0.0,
-    rmse: (map['rmse'] as num?)?.toDouble() ?? 0.0,
-    r2Score: (map['r2_score'] as num?)?.toDouble() ?? 0.0,
-    comparisonMetrics: map['comparison_metrics'] != null
-        ? Map<String, dynamic>.from(map['comparison_metrics'])
-        : null,
     createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
     updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
   );

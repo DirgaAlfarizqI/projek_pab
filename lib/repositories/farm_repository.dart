@@ -18,7 +18,6 @@ class FarmRepository {
       _dataService.inventoryTransactions;
   List<ActivityModel> get activities => _dataService.activities;
   List<HarvestRecordModel> get harvests => _dataService.harvests;
-  List<PredictionModel> get predictions => _dataService.predictions;
 
   CycleFinancialSummary getCycleSummary(String cycleId) =>
       _dataService.calculateCycleSummary(cycleId);

@@ -1,19 +1,27 @@
-import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/formatters.dart';
 import '../services/app_data_service.dart';
+import '../widgets/app_form_dialogs.dart';
 import '../widgets/tanijagung_widgets.dart';
+import '../widgets/ui_kit.dart';
 import 'profit_simulation_screen.dart';
 import 'reports_screen.dart';
 
-/// HALAMAN ANALISIS (Master Prompt Final — Simple But Modern)
-/// REVISI WAJIB DITERAPKAN:
-/// - TIDAK ADA menu, card, grafik, atau shortcut Produktivitas di halaman Analisis.
-/// - Selama belum ada data panen, tampilkan kartu netral "Menunggu data panen" dan sembunyikan persentase -100%.
-/// - Setelah ada data panen: pendapatan - pengeluaran >= 0 tampil "Untung" (hijau), < 0 tampil "Rugi" (merah).
+/// =====================================================================
+/// HALAMAN ANALISIS KEUANGAN (Tahap 4 Redesain — Modern, Hidup, Premium)
+/// =====================================================================
+/// - TIDAK ADA menu, card, grafik, atau shortcut Produktivitas.
+/// - Selama belum ada data panen, tampilkan kartu netral "Menunggu data panen"
+///   dan sembunyikan persentase -100%.
+/// - Grafik Donut & Batang menggambar dari 0 saat halaman muncul + tooltip
+///   interaktif animatif dengan haptic feedback saat disentuh.
+/// - Empty state ilustrasi ladang jagung beranimasi lembut.
+/// - Responsif ponsel & tablet (ResponsiveCenter + AdaptiveTwoColumn).
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
 
@@ -32,6 +40,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       builder: (context, _) {
         final service = AppDataService();
         final cycles = service.cycles;
+        final colors = context.appColors;
+
         if (cycles.isNotEmpty &&
             (_selectedCycleId == null ||
                 !cycles.any((c) => c.id == _selectedCycleId))) {
@@ -39,6 +49,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         }
 
         return Scaffold(
+          backgroundColor: colors.background,
           appBar: AppBar(
             title: const Text('Analisis Keuangan'),
             actions: [
@@ -68,31 +79,36 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               ),
             ],
           ),
-          body: cycles.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text(
-                      'Belum ada data musim tanam untuk dianalisis.',
-                      style: TextStyle(color: AppTheme.textSecondary),
+          body: ResponsiveCenter(
+            maxWidth: 760,
+            child: cycles.isEmpty
+                ? Center(
+                    child: CornEmptyState(
+                      title: 'Belum Ada Musim Tanam untuk Dianalisis',
+                      message: 'Mulai catat lahan dan musim tanam jagung Anda untuk melihat grafik pendapatan, pengeluaran, serta perhitungan harga impas.',
+                      actionLabel: 'Buat Musim Tanam',
+                      actionIcon: Icons.event_available_rounded,
+                      onAction: () =>
+                          AppFormDialogs.showPlantingCycleForm(context),
                     ),
+                  )
+                : _FinanceAnalysisContent(
+                    selectedCycleId: _selectedCycleId!,
+                    cycles: cycles,
+                    onSelectCycle: (id) =>
+                        setState(() => _selectedCycleId = id),
+                    subTab: _financeSubTab,
+                    onSubTabChanged: (idx) =>
+                        setState(() => _financeSubTab = idx),
                   ),
-                )
-              : _FinanceAnalysisContent(
-                  selectedCycleId: _selectedCycleId!,
-                  cycles: cycles,
-                  onSelectCycle: (id) => setState(() => _selectedCycleId = id),
-                  subTab: _financeSubTab,
-                  onSubTabChanged: (idx) =>
-                      setState(() => _financeSubTab = idx),
-                ),
+          ),
         );
       },
     );
   }
 }
 
-class _FinanceAnalysisContent extends StatelessWidget {
+class _FinanceAnalysisContent extends StatefulWidget {
   final String selectedCycleId;
   final List<dynamic> cycles;
   final ValueChanged<String> onSelectCycle;
@@ -108,10 +124,20 @@ class _FinanceAnalysisContent extends StatelessWidget {
   });
 
   @override
+  State<_FinanceAnalysisContent> createState() =>
+      _FinanceAnalysisContentState();
+}
+
+class _FinanceAnalysisContentState extends State<_FinanceAnalysisContent> {
+  int _touchedPieIndex = -1;
+  int _touchedBarIndex = -1;
+
+  @override
   Widget build(BuildContext context) {
     final service = AppDataService();
     final user = service.currentUser!;
-    final summary = service.calculateCycleSummary(selectedCycleId);
+    final colors = context.appColors;
+    final summary = service.calculateCycleSummary(widget.selectedCycleId);
 
     final hasHarvest = summary.hasHarvestData;
     final revenue = summary.totalRevenue;
@@ -132,29 +158,42 @@ class _FinanceAnalysisContent extends StatelessWidget {
               .map((s) => s.totalHarvestTons)
               .fold<double>(5.0, (a, b) => a > b ? a : b);
 
-    // Ringkasan keuangan per lahan
     final plots = service.plots;
+    final chartAnimDur = AppMotion.of(
+      context,
+      const Duration(milliseconds: 560),
+    );
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.sm,
+        AppSpacing.page,
+        AppSpacing.xl,
+      ),
       children: [
         // 1. Pilihan Musim Tanam
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        StaggeredEntrance(
+          index: 0,
+          child: SoftCard(
+            radius: AppRadius.lg,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: selectedCycleId,
+                value: widget.selectedCycleId,
                 isExpanded: true,
-                items: cycles
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                items: widget.cycles
                     .map(
                       (c) => DropdownMenuItem<String>(
                         value: c.id as String,
                         child: Text(
                           '${c.name} (${c.cornVariety})',
-                          style: const TextStyle(
+                          style: TextStyle(
+                            fontFamily: AppTheme.headingFont,
                             fontWeight: FontWeight.w700,
-                            fontSize: 14,
+                            fontSize: 14.5,
+                            color: colors.textPrimary,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -162,7 +201,10 @@ class _FinanceAnalysisContent extends StatelessWidget {
                     )
                     .toList(),
                 onChanged: (v) {
-                  if (v != null) onSelectCycle(v);
+                  if (v != null) {
+                    HapticFeedback.selectionClick();
+                    widget.onSelectCycle(v);
+                  }
                 },
               ),
             ),
@@ -171,214 +213,262 @@ class _FinanceAnalysisContent extends StatelessWidget {
         const SizedBox(height: 14),
 
         // 2. Pill Switcher: Ringkasan | Detail
-        PillSegmentedSwitch(
-          leftLabel: 'Ringkasan',
-          rightLabel: 'Detail',
-          selectedIndex: subTab,
-          onChanged: onSubTabChanged,
-        ),
-        const SizedBox(height: 16),
-
-        if (subTab == 0) ...[
-          // Total Pendapatan & Total Pengeluaran
-          Row(
-            children: [
-              Expanded(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Total Pendapatan',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          hasHarvest
-                              ? AppFormatters.currency(revenue)
-                              : 'Belum Panen',
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Total Pengeluaran',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: AppTheme.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          AppFormatters.currency(expenses),
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: AppTheme.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        StaggeredEntrance(
+          index: 1,
+          child: PillSegmentedSwitch(
+            leftLabel: 'Ringkasan',
+            rightLabel: 'Detail',
+            selectedIndex: widget.subTab,
+            onChanged: (idx) {
+              HapticFeedback.selectionClick();
+              widget.onSubTabChanged(idx);
+            },
           ),
-          const SizedBox(height: 12),
+        ),
+        const SizedBox(height: AppSpacing.md),
 
-          // Banner Status Keuangan (Revisi 2c: Kartu netral "Menunggu data panen" & sembunyikan -100% selama belum panen)
-          if (!hasHarvest)
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppTheme.cornYellowLight,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppTheme.cornYellow, width: 1.4),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppTheme.cornYellow.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.hourglass_top_rounded,
-                      color: AppTheme.darkGreen,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
+        if (widget.subTab == 0) ...[
+          // 3. Total Pendapatan & Total Pengeluaran (Count-Up)
+          StaggeredEntrance(
+            index: 2,
+            child: Row(
+              children: [
+                Expanded(
+                  child: SoftCard(
+                    radius: AppRadius.xl,
+                    padding: const EdgeInsets.all(AppSpacing.md),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Menunggu data panen',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppTheme.primaryGreen,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Total Pendapatan',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: colors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Total Pengeluaran: ${AppFormatters.currency(expenses)} • Untung/rugi dihitung setelah panen diisi.',
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                        const SizedBox(height: 8),
+                        if (hasHarvest)
+                          AnimatedCountUp(
+                            value: revenue,
+                            formatter: AppFormatters.currency,
+                            style: AppTextStyles.money(
+                              size: 18,
+                              color: colors.textPrimary,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Belum Panen',
+                            style: TextStyle(
+                              fontFamily: AppTheme.headingFont,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: colors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: profit >= 0
-                      ? [AppTheme.darkGreen, AppTheme.primaryGreen]
-                      : [AppTheme.dangerRed, const Color(0xFFB71C1C)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SoftCard(
+                    radius: AppRadius.xl,
+                    padding: const EdgeInsets.all(AppSpacing.md),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          profit >= 0
-                              ? 'Keuntungan (Untung)'
-                              : 'Kerugian (Rugi)',
-                          style: const TextStyle(
-                            color: Color(0xFFD9ECE0),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppTheme.cornYellow,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Total Pengeluaran',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: colors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          AppFormatters.currency(profit),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 23,
-                            fontWeight: FontWeight.w900,
+                        const SizedBox(height: 8),
+                        AnimatedCountUp(
+                          value: expenses,
+                          formatter: AppFormatters.currency,
+                          style: AppTextStyles.money(
+                            size: 18,
+                            color: colors.textPrimary,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${profit >= 0 ? "+" : "-"}${AppFormatters.number(pct.abs())}%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
           const SizedBox(height: 14),
 
-          // Biaya Produksi & Harga Impas
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+          // 4. Banner Status Keuangan (Revisi 2c: Kartu netral "Menunggu data panen" & sembunyikan -100% selama belum panen)
+          StaggeredEntrance(
+            index: 3,
+            child: !hasHarvest
+                ? Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cornYellowLight,
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
+                      boxShadow: AppShadows.soft,
+                      border: Border.all(
+                        color: AppTheme.cornYellow,
+                        width: 1.4,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: AppTheme.cornYellow.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.hourglass_top_rounded,
+                            color: AppTheme.darkGreen,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Menunggu data panen',
+                                style: TextStyle(
+                                  fontFamily: AppTheme.headingFont,
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Total Pengeluaran: ${AppFormatters.currency(expenses)} • Untung/rugi dihitung setelah panen diisi.',
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: profit >= 0
+                          ? AppTheme.heroGradient
+                          : AppTheme.lossGradient,
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
+                      boxShadow: profit >= 0
+                          ? AppShadows.hero
+                          : AppShadows.medium,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                profit >= 0
+                                    ? 'Keuntungan (Untung)'
+                                    : 'Kerugian (Rugi)',
+                                style: const TextStyle(
+                                  color: Color(0xFFD9ECE0),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              AnimatedCountUp(
+                                value: profit,
+                                formatter: AppFormatters.currency,
+                                style: AppTextStyles.money(
+                                  size: 25,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        PulseBadge(
+                          label:
+                              '${profit >= 0 ? "+" : "-"}${AppFormatters.number(pct.abs())}%',
+                          background: Colors.white.withValues(alpha: 0.20),
+                          foreground: Colors.white,
+                          icon: profit >= 0
+                              ? Icons.trending_up_rounded
+                              : Icons.trending_down_rounded,
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 14),
+
+          // 5. Biaya Produksi & Harga Impas
+          StaggeredEntrance(
+            index: 4,
+            child: SoftCard(
+              radius: AppRadius.xl,
+              padding: const EdgeInsets.all(18),
               child: Column(
                 children: [
                   _KVRow(
                     'Biaya Produksi Total',
                     AppFormatters.currency(summary.totalExpenses),
                   ),
-                  const Divider(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Divider(height: 1),
+                  ),
                   _KVRow(
                     'Harga Impas per Kg',
                     summary.totalHarvestKg > 0
@@ -392,196 +482,310 @@ class _FinanceAnalysisContent extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Grafik Pendapatan dan Pengeluaran (Donut Chart)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Grafik Pendapatan & Pengeluaran',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
+          // 6. Grafik Donut & Batang (Adaptif 2 Kolom di Tablet, Menggambar dari 0 + Tooltip Interaktif)
+          StaggeredEntrance(
+            index: 5,
+            child: AdaptiveTwoColumn(
+              children: [
+                // Grafik Pendapatan dan Pengeluaran (Donut Chart)
+                SoftCard(
+                  radius: AppRadius.xl,
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(
-                        width: 110,
-                        height: 110,
-                        child: PieChart(
-                          PieChartData(
-                            centerSpaceRadius: 30,
-                            sectionsSpace: 3,
-                            sections: [
-                              PieChartSectionData(
-                                value: revenue > 0 ? revenue : 1,
-                                color: AppTheme.primaryGreen,
-                                radius: 22,
-                                showTitle: false,
-                              ),
-                              PieChartSectionData(
-                                value: expenses > 0 ? expenses : 1,
-                                color: AppTheme.cornYellow,
-                                radius: 22,
-                                showTitle: false,
-                              ),
-                            ],
-                          ),
+                      Text(
+                        'Grafik Pendapatan & Pengeluaran',
+                        style: TextStyle(
+                          fontFamily: AppTheme.headingFont,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
                         ),
                       ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _LegendDot(
-                              color: AppTheme.primaryGreen,
-                              label: 'Pendapatan',
-                              value: hasHarvest
-                                  ? AppFormatters.currency(revenue)
-                                  : 'Menunggu data panen',
-                            ),
-                            const SizedBox(height: 10),
-                            _LegendDot(
-                              color: AppTheme.cornYellow,
-                              label: 'Pengeluaran',
-                              value: AppFormatters.currency(expenses),
-                            ),
-                          ],
-                        ),
+                      const SizedBox(height: 16),
+                      TweenAnimationBuilder<double>(
+                        key: ValueKey('pie_${widget.selectedCycleId}'),
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: chartAnimDur,
+                        curve: AppMotion.standard,
+                        builder: (context, animT, _) {
+                          final revVal =
+                              (revenue > 0 ? revenue : 1.0) *
+                              (animT < 0.05 ? 0.05 : animT);
+                          final expVal =
+                              (expenses > 0 ? expenses : 1.0) *
+                              (animT < 0.05 ? 0.05 : animT);
+                          return Row(
+                            children: [
+                              SizedBox(
+                                width: 118,
+                                height: 118,
+                                child: PieChart(
+                                  PieChartData(
+                                    centerSpaceRadius: 32,
+                                    sectionsSpace: 3,
+                                    pieTouchData: PieTouchData(
+                                      touchCallback: (event, resp) {
+                                        if (!event
+                                                .isInterestedForInteractions ||
+                                            resp == null ||
+                                            resp.touchedSection == null) {
+                                          if (_touchedPieIndex != -1) {
+                                            setState(
+                                              () => _touchedPieIndex = -1,
+                                            );
+                                          }
+                                          return;
+                                        }
+                                        final newIdx = resp
+                                            .touchedSection!
+                                            .touchedSectionIndex;
+                                        if (newIdx != _touchedPieIndex) {
+                                          HapticFeedback.selectionClick();
+                                          setState(
+                                            () => _touchedPieIndex = newIdx,
+                                          );
+                                        }
+                                      },
+                                    ),
+                                    sections: [
+                                      PieChartSectionData(
+                                        value: revVal,
+                                        color: AppTheme.primaryGreen,
+                                        radius: _touchedPieIndex == 0 ? 28 : 23,
+                                        showTitle: false,
+                                      ),
+                                      PieChartSectionData(
+                                        value: expVal,
+                                        color: AppTheme.cornYellow,
+                                        radius: _touchedPieIndex == 1 ? 28 : 23,
+                                        showTitle: false,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 18),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _LegendDot(
+                                      color: AppTheme.primaryGreen,
+                                      label: 'Pendapatan',
+                                      value: hasHarvest
+                                          ? AppFormatters.currency(revenue)
+                                          : 'Menunggu data panen',
+                                      highlighted: _touchedPieIndex == 0,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _LegendDot(
+                                      color: AppTheme.cornYellow,
+                                      label: 'Pengeluaran',
+                                      value: AppFormatters.currency(expenses),
+                                      highlighted: _touchedPieIndex == 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+
+                // Perbandingan Hasil Panen Antar Musim Tanam (Bar Chart Menggambar dari 0 + Tooltip)
+                SoftCard(
+                  radius: AppRadius.xl,
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Perbandingan Hasil Panen Antar Musim (${user.preferredWeightUnit.toUpperCase()})',
+                        style: TextStyle(
+                          fontFamily: AppTheme.headingFont,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      TweenAnimationBuilder<double>(
+                        key: ValueKey('bar_${widget.selectedCycleId}'),
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: chartAnimDur,
+                        curve: AppMotion.standard,
+                        builder: (context, animT, _) {
+                          return SizedBox(
+                            height: 175,
+                            child: BarChart(
+                              BarChartData(
+                                maxY: maxYieldTons * 1.25,
+                                barTouchData: BarTouchData(
+                                  enabled: true,
+                                  touchCallback: (event, resp) {
+                                    if (!event.isInterestedForInteractions ||
+                                        resp == null ||
+                                        resp.spot == null) {
+                                      if (_touchedBarIndex != -1) {
+                                        setState(() => _touchedBarIndex = -1);
+                                      }
+                                      return;
+                                    }
+                                    final idx = resp.spot!.touchedBarGroupIndex;
+                                    if (idx != _touchedBarIndex) {
+                                      HapticFeedback.selectionClick();
+                                      setState(() => _touchedBarIndex = idx);
+                                    }
+                                  },
+                                  touchTooltipData: BarTouchTooltipData(
+                                    getTooltipColor: (_) => AppTheme.darkGreen,
+                                    tooltipBorderRadius: BorderRadius.circular(
+                                      10,
+                                    ),
+                                    getTooltipItem:
+                                        (group, groupIndex, rod, rodIndex) {
+                                          if (groupIndex < 0 ||
+                                              groupIndex >=
+                                                  allSummaries.length) {
+                                            return null;
+                                          }
+                                          final s = allSummaries[groupIndex];
+                                          return BarTooltipItem(
+                                            '${s.cycle.name}\n${AppFormatters.formatWeightByPreference(s.totalHarvestTons, user.preferredWeightUnit)}',
+                                            const TextStyle(
+                                              fontFamily: AppTheme.headingFont,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 11.5,
+                                            ),
+                                          );
+                                        },
+                                  ),
+                                ),
+                                gridData: const FlGridData(
+                                  show: true,
+                                  drawVerticalLine: false,
+                                ),
+                                borderData: FlBorderData(show: false),
+                                titlesData: FlTitlesData(
+                                  leftTitles: const AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                  rightTitles: const AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                  topTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 22,
+                                      getTitlesWidget: (val, _) {
+                                        final idx = val.toInt();
+                                        if (idx < 0 ||
+                                            idx >= allSummaries.length) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Text(
+                                          AppFormatters.formatWeightByPreference(
+                                            allSummaries[idx].totalHarvestTons,
+                                            user.preferredWeightUnit,
+                                          ),
+                                          style: TextStyle(
+                                            fontFamily: AppTheme.headingFont,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: colors.textPrimary,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      reservedSize: 28,
+                                      getTitlesWidget: (val, _) {
+                                        final idx = val.toInt();
+                                        if (idx < 0 ||
+                                            idx >= allSummaries.length) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 6,
+                                          ),
+                                          child: Text(
+                                            'MT ${idx + 1}',
+                                            style: TextStyle(
+                                              fontFamily: AppTheme.headingFont,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: colors.textSecondary,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                barGroups: List.generate(allSummaries.length, (
+                                  i,
+                                ) {
+                                  final isSelected =
+                                      allSummaries[i].cycle.id ==
+                                      widget.selectedCycleId;
+                                  final isTouched = i == _touchedBarIndex;
+                                  return BarChartGroupData(
+                                    x: i,
+                                    barRods: [
+                                      BarChartRodData(
+                                        toY:
+                                            allSummaries[i].totalHarvestTons *
+                                            animT,
+                                        width: isTouched ? 32 : 28,
+                                        color: isSelected
+                                            ? AppTheme.primaryGreen
+                                            : AppTheme.cornYellow,
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                              top: Radius.circular(10),
+                                            ),
+                                      ),
+                                    ],
+                                  );
+                                }),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 14),
-
-          // Perbandingan Hasil Panen Antar Musim Tanam
-          Card(
-            child: Padding(
+        ] else ...[
+          // TAB 1: DETAIL KEUANGAN, KOMPOSISI KATEGORI PENGELUARAN & RINGKASAN KEUANGAN PER LAHAN
+          StaggeredEntrance(
+            index: 2,
+            child: SoftCard(
+              radius: AppRadius.xl,
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Perbandingan Hasil Panen Antar Musim (${user.preferredWeightUnit.toUpperCase()})',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    height: 170,
-                    child: BarChart(
-                      BarChartData(
-                        maxY: maxYieldTons * 1.25,
-                        gridData: const FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                        ),
-                        borderData: FlBorderData(show: false),
-                        titlesData: FlTitlesData(
-                          leftTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          topTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 22,
-                              getTitlesWidget: (val, _) {
-                                final idx = val.toInt();
-                                if (idx < 0 || idx >= allSummaries.length) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Text(
-                                  AppFormatters.formatWeightByPreference(
-                                    allSummaries[idx].totalHarvestTons,
-                                    user.preferredWeightUnit,
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 28,
-                              getTitlesWidget: (val, _) {
-                                final idx = val.toInt();
-                                if (idx < 0 || idx >= allSummaries.length) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    'MT ${idx + 1}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        barGroups: List.generate(allSummaries.length, (i) {
-                          final isSelected =
-                              allSummaries[i].cycle.id == selectedCycleId;
-                          return BarChartGroupData(
-                            x: i,
-                            barRods: [
-                              BarChartRodData(
-                                toY: allSummaries[i].totalHarvestTons,
-                                width: 28,
-                                color: isSelected
-                                    ? AppTheme.primaryGreen
-                                    : AppTheme.cornYellow,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(8),
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ] else ...[
-          // TAB 1: DETAIL KEUANGAN, KOMPOSISI KATEGORI PENGELUARAN & RINGKASAN KEUANGAN PER LAHAN
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
                     'Rincian Keuangan Musim Tanam',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontFamily: AppTheme.headingFont,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -616,7 +820,10 @@ class _FinanceAnalysisContent extends StatelessWidget {
                         : 'Menunggu data panen',
                     bold: true,
                   ),
-                  const Divider(height: 20),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    child: Divider(height: 1),
+                  ),
                   _KVRow(
                     'Keuntungan / Kerugian',
                     hasHarvest
@@ -644,133 +851,173 @@ class _FinanceAnalysisContent extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Rincian Pengeluaran per Kategori (Pupuk, Benih, Pestisida, Pengolahan lahan, Lain-lain)
-          Card(
-            child: Padding(
+          StaggeredEntrance(
+            index: 3,
+            child: SoftCard(
+              radius: AppRadius.xl,
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Rincian Pengeluaran per Kategori',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontFamily: AppTheme.headingFont,
+                      fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
+                      color: colors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
                   ...AppConstants.expenseCategories.map((cat) {
                     final amount = summary.expensesByCategory[cat] ?? 0.0;
-                    return _KVRow(
-                      cat,
-                      AppFormatters.currency(amount),
-                      bold: amount > 0,
+                    final ratio = expenses > 0
+                        ? (amount / expenses).clamp(0.0, 1.0)
+                        : 0.0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Column(
+                        children: [
+                          _KVRow(
+                            cat,
+                            AppFormatters.currency(amount),
+                            bold: amount > 0,
+                          ),
+                          const SizedBox(height: 4),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.0, end: ratio),
+                              duration: chartAnimDur,
+                              curve: AppMotion.standard,
+                              builder: (context, v, _) =>
+                                  LinearProgressIndicator(
+                                    value: v,
+                                    minHeight: 6,
+                                    backgroundColor: colors.accentTint,
+                                    color: amount > 0
+                                        ? AppTheme.primaryGreen
+                                        : colors.border,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   }),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
-          // Ringkasan Keuangan per Lahan
-          const Text(
-            'Ringkasan Keuangan per Lahan',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...plots.map((plot) {
-            final plotCycles = service.getCyclesForPlot(plot.id);
-            double plotExpenses = 0;
-            double plotRevenue = 0;
-            double plotTons = 0;
-            bool plotHasHarvest = false;
-            for (final c in plotCycles) {
-              final s = service.calculateCycleSummary(c.id);
-              plotExpenses += s.totalExpenses;
-              plotRevenue += s.totalRevenue;
-              plotTons += s.totalHarvestTons;
-              if (s.hasHarvestData) {
-                plotHasHarvest = true;
-              }
-            }
-            final plotProfit = plotRevenue - plotExpenses;
+          // Ringkasan Keuangan per Lahan (Adaptif 2 Kolom di Tablet)
+          StaggeredEntrance(
+            index: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionHeader(title: 'Ringkasan Keuangan per Lahan'),
+                const SizedBox(height: 10),
+                AdaptiveTwoColumn(
+                  children: plots.map((plot) {
+                    final plotCycles = service.getCyclesForPlot(plot.id);
+                    double plotExpenses = 0;
+                    double plotRevenue = 0;
+                    double plotTons = 0;
+                    bool plotHasHarvest = false;
+                    for (final c in plotCycles) {
+                      final s = service.calculateCycleSummary(c.id);
+                      plotExpenses += s.totalExpenses;
+                      plotRevenue += s.totalRevenue;
+                      plotTons += s.totalHarvestTons;
+                      if (s.hasHarvestData) {
+                        plotHasHarvest = true;
+                      }
+                    }
+                    final plotProfit = plotRevenue - plotExpenses;
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    return SoftCard(
+                      radius: AppRadius.xl,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              '${plot.name} (${AppFormatters.formatAreaByPreference(plot.areaInHectares, user.preferredAreaUnit)})',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${plot.name} (${AppFormatters.formatAreaByPreference(plot.areaInHectares, user.preferredAreaUnit)})',
+                                  style: TextStyle(
+                                    fontFamily: AppTheme.headingFont,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: colors.textPrimary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${plotCycles.length} Musim • ${AppFormatters.formatWeightByPreference(plotTons, user.preferredWeightUnit)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: colors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            '${plotCycles.length} Musim • ${AppFormatters.formatWeightByPreference(plotTons, user.preferredWeightUnit)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textSecondary,
-                            ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: Divider(height: 1),
+                          ),
+                          _KVRow(
+                            'Total Pendapatan Lahan',
+                            plotHasHarvest
+                                ? AppFormatters.currency(plotRevenue)
+                                : 'Menunggu data panen',
+                          ),
+                          _KVRow(
+                            'Total Pengeluaran Lahan',
+                            AppFormatters.currency(plotExpenses),
+                          ),
+                          _KVRow(
+                            'Status / Hasil Lahan',
+                            plotHasHarvest
+                                ? '${plotProfit >= 0 ? "Untung" : "Rugi"} (${AppFormatters.currency(plotProfit)})'
+                                : 'Menunggu data panen',
+                            bold: true,
                           ),
                         ],
                       ),
-                      const Divider(height: 16),
-                      _KVRow(
-                        'Total Pendapatan Lahan',
-                        plotHasHarvest
-                            ? AppFormatters.currency(plotRevenue)
-                            : 'Menunggu data panen',
-                      ),
-                      _KVRow(
-                        'Total Pengeluaran Lahan',
-                        AppFormatters.currency(plotExpenses),
-                      ),
-                      _KVRow(
-                        'Status / Hasil Lahan',
-                        plotHasHarvest
-                            ? '${plotProfit >= 0 ? "Untung" : "Rugi"} (${AppFormatters.currency(plotProfit)})'
-                            : 'Menunggu data panen',
-                        bold: true,
-                      ),
-                    ],
-                  ),
+                    );
+                  }).toList(),
                 ),
-              ),
-            );
-          }),
+              ],
+            ),
+          ),
         ],
 
-        const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      ProfitSimulationScreen(initialCycleId: selectedCycleId),
-                ),
-              );
-            },
-            icon: const Icon(Icons.calculate_outlined),
-            label: const Text('Simulasi Keuntungan'),
+        const SizedBox(height: 18),
+        StaggeredEntrance(
+          index: 6,
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfitSimulationScreen(
+                      initialCycleId: widget.selectedCycleId,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.calculate_outlined),
+              label: const Text('Simulasi Keuntungan'),
+            ),
           ),
         ),
       ],
@@ -782,46 +1029,59 @@ class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
   final String value;
+  final bool highlighted;
 
   const _LegendDot({
     required this.color,
     required this.label,
     required this.value,
+    this.highlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+    final colors = context.appColors;
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      padding: EdgeInsets.symmetric(
+        horizontal: highlighted ? 8 : 0,
+        vertical: highlighted ? 4 : 0,
+      ),
+      decoration: BoxDecoration(
+        color: highlighted ? colors.accentTint : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12.5, color: colors.textSecondary),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontFamily: AppTheme.headingFont,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: colors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -835,6 +1095,7 @@ class _KVRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -843,10 +1104,7 @@ class _KVRow extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppTheme.textSecondary,
-              ),
+              style: TextStyle(fontSize: 13, color: colors.textSecondary),
             ),
           ),
           const SizedBox(width: 8),
@@ -855,9 +1113,10 @@ class _KVRow extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: TextStyle(
+                fontFamily: bold ? AppTheme.headingFont : AppTheme.bodyFont,
                 fontSize: 13.5,
-                fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
-                color: AppTheme.textPrimary,
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
+                color: colors.textPrimary,
               ),
             ),
           ),

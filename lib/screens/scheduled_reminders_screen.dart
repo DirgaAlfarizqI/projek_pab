@@ -6,6 +6,7 @@ import '../core/utils/formatters.dart';
 import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../services/local_notification_service.dart';
+import '../widgets/ui_kit.dart';
 
 /// HALAMAN PENGINGAT JADWAL BUATAN PENGGUNA (Revisi 4: Profil > Notifikasi)
 /// - Pengingat Penyiraman, Pemupukan, Penyemprotan, Perawatan Lahan, atau Lainnya
@@ -112,36 +113,20 @@ class _ScheduledRemindersScreenState extends State<ScheduledRemindersScreen> {
               ),
               const SizedBox(height: 10),
               if (reminders.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.notifications_paused_outlined,
-                          size: 48,
-                          color: AppTheme.textSecondary,
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Belum Ada Pengingat Terjadwal',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Ketuk tombol "Tambah Pengingat" untuk membuat jadwal penyiraman atau pemupukan lahan jagung Anda.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppTheme.textSecondary),
-                        ),
-                      ],
-                    ),
+                SoftCard(
+                  radius: AppRadius.xl,
+                  child: CornEmptyState(
+                    illustrationSize: 105,
+                    title: 'Belum Ada Pengingat Terjadwal',
+                    message: 'Ketuk tombol "Tambah Pengingat" untuk membuat jadwal penyiraman atau pemupukan lahan jagung Anda.',
+                    actionLabel: 'Tambah Pengingat',
+                    actionIcon: Icons.add_alarm_rounded,
+                    onAction: () => _showReminderForm(context),
                   ),
                 )
               else
-                ...reminders.map((rem) {
+                ...List.generate(reminders.length, (idx) {
+                  final rem = reminders[idx];
                   final plot = rem.plotId != null
                       ? service.getPlotById(rem.plotId!)
                       : null;
@@ -152,127 +137,135 @@ class _ScheduledRemindersScreenState extends State<ScheduledRemindersScreen> {
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: rem.isEnabled
-                                        ? AppTheme.lightGreen
-                                        : AppTheme.borderColor,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    rem.activityType == 'Penyiraman'
-                                        ? Icons.water_drop_outlined
-                                        : Icons.compost_outlined,
-                                    color: rem.isEnabled
-                                        ? AppTheme.darkGreen
-                                        : AppTheme.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        rem.activityType,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800,
-                                          color: rem.isEnabled
-                                              ? AppTheme.textPrimary
-                                              : AppTheme.textSecondary,
-                                        ),
+                    child: StaggeredEntrance(
+                      index: idx,
+                      child: SwipeToDeleteWrapper(
+                        dismissKey: ValueKey('rem_${rem.id}'),
+                        onDelete: () => service.deleteScheduledReminder(rem.id),
+                        child: SoftCard(
+                          radius: AppRadius.xl,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 46,
+                                    height: 46,
+                                    decoration: BoxDecoration(
+                                      color: rem.isEnabled
+                                          ? AppTheme.lightGreen
+                                          : AppTheme.borderColor,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Center(
+                                      child: AnimatedBellIcon(
+                                        animate: rem.isEnabled,
+                                        color: rem.isEnabled
+                                            ? AppTheme.darkGreen
+                                            : AppTheme.textSecondary,
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${plot?.name ?? "Semua Lahan"} • $repeatText',
-                                        style: const TextStyle(
-                                          fontSize: 12.5,
-                                          color: AppTheme.textSecondary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                                Switch(
-                                  value: rem.isEnabled,
-                                  onChanged: (val) => service
-                                      .toggleScheduledReminder(rem.id, val),
-                                ),
-                              ],
-                            ),
-                            const Divider(height: 18),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Jadwal Berikutnya: ${AppFormatters.date(nextOcc)} • ${_formatTime(nextOcc)}',
-                                        style: const TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppTheme.darkGreen,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          rem.activityType,
+                                          style: TextStyle(
+                                            fontFamily: AppTheme.headingFont,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w800,
+                                            color: rem.isEnabled
+                                                ? AppTheme.textPrimary
+                                                : AppTheme.textSecondary,
+                                          ),
                                         ),
-                                      ),
-                                      if (rem.notes.isNotEmpty) ...[
                                         const SizedBox(height: 2),
                                         Text(
-                                          'Catatan: ${rem.notes}',
+                                          '${plot?.name ?? "Semua Lahan"} • $repeatText',
                                           style: const TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 12.5,
                                             color: AppTheme.textSecondary,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: rem.isEnabled,
+                                    onChanged: (val) => service
+                                        .toggleScheduledReminder(rem.id, val),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 18),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Jadwal Berikutnya: ${AppFormatters.date(nextOcc)} • ${_formatTime(nextOcc)}',
+                                          style: const TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.darkGreen,
+                                          ),
+                                        ),
+                                        if (rem.notes.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Catatan: ${rem.notes}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Edit Pengingat',
+                                        icon: const Icon(
+                                          Icons.edit_outlined,
+                                          size: 20,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                        onPressed: () => _showReminderForm(
+                                          context,
+                                          existingReminder: rem,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Hapus Pengingat',
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 20,
+                                          color: AppTheme.dangerRed,
+                                        ),
+                                        onPressed: () => service
+                                            .deleteScheduledReminder(rem.id),
+                                      ),
                                     ],
                                   ),
-                                ),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'Edit Pengingat',
-                                      icon: const Icon(
-                                        Icons.edit_outlined,
-                                        size: 20,
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                      onPressed: () => _showReminderForm(
-                                        context,
-                                        existingReminder: rem,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Hapus Pengingat',
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        size: 20,
-                                        color: AppTheme.dangerRed,
-                                      ),
-                                      onPressed: () => service
-                                          .deleteScheduledReminder(rem.id),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

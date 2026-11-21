@@ -10,6 +10,7 @@ import '../core/theme/app_theme.dart';
 import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../widgets/tanijagung_widgets.dart';
+import '../widgets/ui_kit.dart';
 import 'expenses_screen.dart';
 import 'harvest_input_screen.dart';
 import 'inventory_screen.dart';
@@ -43,211 +44,238 @@ class ProfileScreen extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(title: const Text('Profil')),
-          body: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              // Header Avatar Petani (Bisa Diketuk untuk Ganti Foto Profil) + Nama & Email
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => _showProfilePhotoOptions(context, user),
-                      child: FarmerAvatarIllustration(
-                        size: 84,
-                        customImagePath: user.profilePhotoPath,
-                        showEditBadge: true,
-                      ),
-                    ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user.name,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.textPrimary,
-                            ),
+          body: ResponsiveCenter(
+            maxWidth: 760,
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                // Header Avatar Petani (Bisa Diketuk untuk Ganti Foto Profil) + Nama & Email
+                StaggeredEntrance(
+                  index: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showProfilePhotoOptions(context, user),
+                          child: FarmerAvatarIllustration(
+                            size: 84,
+                            customImagePath: user.profilePhotoPath,
+                            showEditBadge: true,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user.email,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppTheme.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.name,
+                                style: const TextStyle(
+                                  fontFamily: AppTheme.headingFont,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user.email,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user.farmBusinessName,
+                                style: const TextStyle(
+                                  fontFamily: AppTheme.headingFont,
+                                  fontSize: 12.5,
+                                  color: AppTheme.primaryDarkGreen,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user.farmBusinessName,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              color: AppTheme.primaryDarkGreen,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // 4 Menu Utama Pengaturan
-              Card(
-                child: Column(
-                  children: [
-                    _ProfileMenuTile(
-                      icon: Icons.person_outline_rounded,
-                      title: 'Pengaturan Akun',
-                      subtitle: 'Nama pengguna, usaha tani & nomor telepon',
-                      onTap: () => _showAccountSettingsSheet(context),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.notifications_none_rounded,
-                      title: 'Notifikasi',
-                      subtitle:
-                          'Pengingat jadwal kegiatan ($activeRemindersCount jadwal aktif)',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ScheduledRemindersScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.straighten_rounded,
-                      title: 'Satuan',
-                      subtitle:
-                          'Luas: ${user.preferredAreaUnit} • Panen: ${user.preferredWeightUnit} • Mata Uang: Rp',
-                      onTap: () => _showUnitSettingsSheet(context),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.info_outline_rounded,
-                      title: 'Tentang Aplikasi',
-                      subtitle: 'TaniJagung v1.0.0 • Kelola Usaha Tani, Raih Hasil Maksimal',
-                      onTap: () => _showAboutAppDialog(context),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Pintasan Seluruh Halaman Fungsional TaniJagung
-              Card(
-                child: Column(
-                  children: [
-                    _ProfileMenuTile(
-                      icon: Icons.grain_rounded,
-                      title: 'Input Benih & Pupuk',
-                      subtitle: 'Pencatatan pembelian & pemakaian benih/pupuk',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SeedFertilizerScreen(),
                         ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.inventory_2_outlined,
-                      title: 'Stok Pupuk',
-                      subtitle: 'Stok tersedia per jenis pupuk & peringatan batas minimum',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const InventoryScreen(),
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'Daftar Pengeluaran',
-                      subtitle:
-                          '5 kategori biaya operasional & integrasi stok pupuk',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ExpensesScreen(),
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.scale_outlined,
-                      title: 'Input Hasil Panen',
-                      subtitle: 'Konversi otomatis ton ke kg & pendapatan',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const HarvestInputScreen(),
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.calculate_outlined,
-                      title: 'Simulasi Keuntungan',
-                      subtitle: 'Simulasi pendapatan, laba/rugi & harga impas',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProfitSimulationScreen(),
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    _ProfileMenuTile(
-                      icon: Icons.picture_as_pdf_outlined,
-                      title: 'Riwayat & Laporan PDF',
-                      subtitle:
-                          'Filter tahun, lahan, perbandingan & Export PDF',
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ReportsScreen(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Tombol Logout Merah Salmon Penuh
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.salmonLogout,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(28),
+                      ],
                     ),
                   ),
-                  onPressed: () => service.logout(),
-                  icon: const Icon(Icons.logout_rounded),
-                  label: const Text(
-                    'Logout',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 18),
+
+                // 4 Menu Utama Pengaturan
+                StaggeredEntrance(
+                  index: 1,
+                  child: SoftCard(
+                    radius: AppRadius.xl,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      children: [
+                        _ProfileMenuTile(
+                          icon: Icons.person_outline_rounded,
+                          title: 'Pengaturan Akun',
+                          subtitle: 'Nama pengguna, usaha tani & nomor telepon',
+                          onTap: () => _showAccountSettingsSheet(context),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.notifications_none_rounded,
+                          title: 'Notifikasi',
+                          subtitle:
+                              'Pengingat jadwal kegiatan ($activeRemindersCount jadwal aktif)',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const ScheduledRemindersScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.straighten_rounded,
+                          title: 'Satuan',
+                          subtitle:
+                              'Luas: ${user.preferredAreaUnit} • Panen: ${user.preferredWeightUnit} • Mata Uang: Rp',
+                          onTap: () => _showUnitSettingsSheet(context),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.info_outline_rounded,
+                          title: 'Tentang Aplikasi',
+                          subtitle: 'TaniJagung v1.0.0 • Kelola Usaha Tani, Raih Hasil Maksimal',
+                          onTap: () => _showAboutAppDialog(context),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              const BottomCornLeavesDecoration(),
-            ],
+                const SizedBox(height: 16),
+
+                // Pintasan Seluruh Halaman Fungsional TaniJagung
+                StaggeredEntrance(
+                  index: 2,
+                  child: SoftCard(
+                    radius: AppRadius.xl,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      children: [
+                        _ProfileMenuTile(
+                          icon: Icons.grain_rounded,
+                          title: 'Input Benih & Pupuk',
+                          subtitle:
+                              'Pencatatan pembelian & pemakaian benih/pupuk',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SeedFertilizerScreen(),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.inventory_2_outlined,
+                          title: 'Stok Pupuk',
+                          subtitle: 'Stok tersedia per jenis pupuk & peringatan batas minimum',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const InventoryScreen(),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Daftar Pengeluaran',
+                          subtitle: '5 kategori biaya operasional & integrasi stok pupuk',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ExpensesScreen(),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.scale_outlined,
+                          title: 'Input Hasil Panen',
+                          subtitle: 'Konversi otomatis ton ke kg & pendapatan',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const HarvestInputScreen(),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.calculate_outlined,
+                          title: 'Simulasi Keuntungan',
+                          subtitle:
+                              'Simulasi pendapatan, laba/rugi & harga impas',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ProfitSimulationScreen(),
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        _ProfileMenuTile(
+                          icon: Icons.picture_as_pdf_outlined,
+                          title: 'Riwayat & Laporan PDF',
+                          subtitle:
+                              'Filter tahun, lahan, perbandingan & Export PDF',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ReportsScreen(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Tombol Logout Merah Salmon Penuh
+                StaggeredEntrance(
+                  index: 3,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.salmonLogout,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                      ),
+                      onPressed: () => service.logout(),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text(
+                        'Logout',
+                        style: TextStyle(
+                          fontFamily: AppTheme.headingFont,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const BottomCornLeavesDecoration(),
+              ],
+            ),
           ),
         );
       },

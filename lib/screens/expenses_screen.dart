@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../widgets/app_form_dialogs.dart';
 import '../widgets/tanijagung_widgets.dart';
+import '../widgets/ui_kit.dart';
 
 /// HALAMAN 9: DAFTAR PENGELUARAN (Sesuai Gambar Referensi Baris 2 Kolom 3)
 /// - Menampilkan daftar transaksi dengan ikon karung/kantong sesuai kategori
@@ -165,16 +166,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 ),
               ),
 
-              // Daftar Карtu Pengeluaran (Sesuai Gambar Referensi)
+              // Daftar Kartu Pengeluaran (Staggered Entrance + Swipe-to-Delete + Empty State Ilustrasi)
               Expanded(
                 child: list.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            'Belum ada data pengeluaran tercatat.',
-                            style: TextStyle(color: AppTheme.textSecondary),
-                          ),
+                    ? Center(
+                        child: CornEmptyState(
+                          illustrationSize: 105,
+                          title: 'Belum Ada Pengeluaran Tercatat',
+                          message: 'Catat pembelian pupuk, benih, pestisida, pengolahan lahan, atau ambil langsung dari Stok Pupuk Anda.',
                         ),
                       )
                     : ListView.builder(
@@ -186,96 +185,110 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           final cycle = service.getCycleById(exp.cycleId);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 52,
-                                      height: 52,
-                                      decoration: BoxDecoration(
-                                        color: _categoryBgColor(exp.category),
-                                        borderRadius: BorderRadius.circular(14),
+                            child: StaggeredEntrance(
+                              index: idx,
+                              child: SwipeToDeleteWrapper(
+                                dismissKey: ValueKey('exp_${exp.id}'),
+                                onDelete: () => service.deleteExpense(exp.id),
+                                child: SoftCard(
+                                  radius: AppRadius.xl,
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 52,
+                                        height: 52,
+                                        decoration: BoxDecoration(
+                                          color: _categoryBgColor(exp.category),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          _categoryIcon(exp.category),
+                                          color: _categoryIconColor(
+                                            exp.category,
+                                          ),
+                                          size: 28,
+                                        ),
                                       ),
-                                      child: Icon(
-                                        _categoryIcon(exp.category),
-                                        color: _categoryIconColor(exp.category),
-                                        size: 28,
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              exp.name,
+                                              style: const TextStyle(
+                                                fontFamily:
+                                                    AppTheme.headingFont,
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppTheme.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              exp.isFromFertilizerStock
+                                                  ? 'Rp0 (Diambil dari Stok Pupuk: ${AppFormatters.number(exp.stockTakenQuantity)} ${exp.unit})'
+                                                  : AppFormatters.currency(
+                                                      exp.totalCost,
+                                                    ),
+                                              style: TextStyle(
+                                                fontFamily:
+                                                    AppTheme.headingFont,
+                                                fontSize:
+                                                    exp.isFromFertilizerStock
+                                                    ? 13.5
+                                                    : 16,
+                                                fontWeight: FontWeight.w800,
+                                                color: exp.isFromFertilizerStock
+                                                    ? AppTheme.darkGreen
+                                                    : AppTheme.textPrimary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${AppFormatters.date(exp.date)} • ${exp.category} • ${plot?.name ?? "-"} (${cycle?.name ?? "-"})',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
-                                            exp.name,
-                                            style: const TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppTheme.textPrimary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            exp.isFromFertilizerStock
-                                                ? 'Rp0 (Diambil dari Stok Pupuk: ${AppFormatters.number(exp.stockTakenQuantity)} ${exp.unit})'
-                                                : AppFormatters.currency(
-                                                    exp.totalCost,
-                                                  ),
-                                            style: TextStyle(
-                                              fontSize:
-                                                  exp.isFromFertilizerStock
-                                                  ? 13.5
-                                                  : 16,
-                                              fontWeight: FontWeight.w900,
-                                              color: exp.isFromFertilizerStock
-                                                  ? AppTheme.darkGreen
-                                                  : AppTheme.textPrimary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${AppFormatters.date(exp.date)} • ${exp.category} • ${plot?.name ?? "-"} (${cycle?.name ?? "-"})',
-                                            style: const TextStyle(
-                                              fontSize: 12,
+                                          IconButton(
+                                            tooltip: 'Edit Pengeluaran',
+                                            icon: const Icon(
+                                              Icons.edit_outlined,
                                               color: AppTheme.textSecondary,
+                                              size: 20,
                                             ),
+                                            onPressed: () =>
+                                                AppFormDialogs.showExpenseForm(
+                                                  context,
+                                                  existingExpense: exp,
+                                                ),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'Hapus Pengeluaran',
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: AppTheme.dangerRed,
+                                              size: 20,
+                                            ),
+                                            onPressed: () =>
+                                                service.deleteExpense(exp.id),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          tooltip: 'Edit Pengeluaran',
-                                          icon: const Icon(
-                                            Icons.edit_outlined,
-                                            color: AppTheme.textSecondary,
-                                            size: 20,
-                                          ),
-                                          onPressed: () =>
-                                              AppFormDialogs.showExpenseForm(
-                                                context,
-                                                existingExpense: exp,
-                                              ),
-                                        ),
-                                        IconButton(
-                                          tooltip: 'Hapus Pengeluaran',
-                                          icon: const Icon(
-                                            Icons.delete_outline,
-                                            color: AppTheme.dangerRed,
-                                            size: 20,
-                                          ),
-                                          onPressed: () =>
-                                              service.deleteExpense(exp.id),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

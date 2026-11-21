@@ -3,9 +3,6 @@ class AppConstants {
   static const String appSlogan = 'Kelola Usaha Tani, Raih Hasil Maksimal';
   static const String subSlogan = 'Bersama Petani Menuju Panen Maksimal';
 
-  // Konfigurasi Internal URL Backend Prediksi FastAPI (Tidak ditampilkan di form profil pengguna)
-  static const String internalPredictionApiUrl = 'http://127.0.0.1:8000';
-
   // 5 Kategori Pengeluaran Sesuai Revisi 1:
   // "Tenaga kerja", "Sewa alat", "Transportasi", dan "Biaya panen" digabung ke "Lain-lain"
   static const List<String> expenseCategories = [

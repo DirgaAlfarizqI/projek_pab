@@ -81,7 +81,6 @@ class AppDataService extends ChangeNotifier {
   List<InventoryTransactionModel> _inventoryTransactions = [];
   List<ActivityModel> _activities = [];
   List<HarvestRecordModel> _harvests = [];
-  List<PredictionModel> _predictions = [];
   List<AppNotificationModel> _notifications = [];
   List<ScheduledReminderModel> _reminders = [];
 
@@ -161,12 +160,6 @@ class AppDataService extends ChangeNotifier {
             ? []
             : _harvests.where((e) => e.userId == _currentUser!.id).toList()
         ..sort((a, b) => b.harvestDate.compareTo(a.harvestDate));
-
-  List<PredictionModel> get predictions =>
-      _currentUser == null
-            ? []
-            : _predictions.where((e) => e.userId == _currentUser!.id).toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   /// Membangun daftar pengingat otomatis berdasarkan tanggal manual pengguna dan batas stok minimum
   List<AppNotificationModel> get generatedNotifications {
@@ -644,11 +637,6 @@ class AppDataService extends ChangeNotifier {
           h.userId == uid &&
           (h.plotId == plotId || relatedCycleIds.contains(h.cycleId)),
     );
-    _predictions.removeWhere(
-      (p) =>
-          p.userId == uid &&
-          (p.plotId == plotId || relatedCycleIds.contains(p.cycleId)),
-    );
 
     await _persistAllToDisk();
     notifyListeners();
@@ -756,7 +744,6 @@ class AppDataService extends ChangeNotifier {
     _expenses.removeWhere((e) => e.cycleId == cycleId && e.userId == uid);
     _activities.removeWhere((a) => a.cycleId == cycleId && a.userId == uid);
     _harvests.removeWhere((h) => h.cycleId == cycleId && h.userId == uid);
-    _predictions.removeWhere((p) => p.cycleId == cycleId && p.userId == uid);
     await _persistAllToDisk();
     notifyListeners();
   }
@@ -1569,20 +1556,6 @@ class AppDataService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==================== RIWAYAT PREDIKSI ML ====================
-
-  Future<PredictionModel> savePrediction(PredictionModel prediction) async {
-    _predictions.add(prediction);
-    await _persistAllToDisk();
-    _syncToFirestoreIfAvailable(
-      'predictions',
-      prediction.id,
-      prediction.toMap(),
-    );
-    notifyListeners();
-    return prediction;
-  }
-
   // ==================== PERHITUNGAN OTOMATIS KEUANGAN & PRODUKTIVITAS ====================
 
   /// Menghitung seluruh metrik keuangan dan produktivitas untuk 1 musim tanam secara akurat
@@ -2254,7 +2227,6 @@ class AppDataService extends ChangeNotifier {
       'table_harvest_records',
       HarvestRecordModel.fromMap,
     );
-    _predictions = _decodeList('table_predictions', PredictionModel.fromMap);
     _notifications = _decodeList(
       'table_notifications',
       AppNotificationModel.fromMap,
@@ -2314,10 +2286,6 @@ class AppDataService extends ChangeNotifier {
     await _prefs?.setString(
       'table_harvest_records',
       jsonEncode(_harvests.map((e) => e.toMap()).toList()),
-    );
-    await _prefs?.setString(
-      'table_predictions',
-      jsonEncode(_predictions.map((e) => e.toMap()).toList()),
     );
     await _prefs?.setString(
       'table_notifications',

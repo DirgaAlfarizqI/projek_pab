@@ -5,6 +5,7 @@ import '../core/utils/formatters.dart';
 import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../widgets/tanijagung_widgets.dart';
+import '../widgets/ui_kit.dart';
 
 /// HALAMAN STOK PUPUK (Revisi 6: Stok Benih dihapus sepenuhnya, fokus Stok Pupuk & terhubung ke Pengeluaran)
 /// - Tanpa Tab Benih/Pupuk (Hanya Stok Pupuk)
@@ -29,41 +30,24 @@ class InventoryScreen extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             children: [
               if (fertilizerItems.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(22),
-                    child: Column(
-                      children: const [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: 48,
-                          color: AppTheme.textSecondary,
-                        ),
-                        SizedBox(height: 10),
-                        Text(
-                          'Belum Ada Stok Pupuk',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Tambahkan stok pupuk beserta batas minimum peringatan untuk memantau sisa persediaan dan menghubungkannya dengan form pengeluaran.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppTheme.textSecondary),
-                        ),
-                      ],
-                    ),
+                SoftCard(
+                  radius: AppRadius.xl,
+                  child: const CornEmptyState(
+                    illustrationSize: 105,
+                    title: 'Belum Ada Stok Pupuk',
+                    message: 'Tambahkan stok pupuk beserta batas minimum peringatan untuk memantau sisa persediaan dan menghubungkannya dengan form pengeluaran.',
                   ),
                 )
               else
-                ...fertilizerItems.map((item) {
+                ...List.generate(fertilizerItems.length, (idx) {
+                  final item = fertilizerItems[idx];
                   final isLow = item.isLowStock || item.isOutOfStock;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
-                    child: Card(
-                      child: Padding(
+                    child: StaggeredEntrance(
+                      index: idx,
+                      child: SoftCard(
+                        radius: AppRadius.xl,
                         padding: const EdgeInsets.all(18),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,6 +86,8 @@ class InventoryScreen extends StatelessWidget {
                                             child: Text(
                                               item.itemName,
                                               style: const TextStyle(
+                                                fontFamily:
+                                                    AppTheme.headingFont,
                                                 fontSize: 17,
                                                 fontWeight: FontWeight.w800,
                                                 color: AppTheme.textPrimary,
@@ -132,8 +118,9 @@ class InventoryScreen extends StatelessWidget {
                                       Text(
                                         '${AppFormatters.number(item.remainingStock)} ${item.unit}',
                                         style: const TextStyle(
+                                          fontFamily: AppTheme.headingFont,
                                           fontSize: 24,
-                                          fontWeight: FontWeight.w900,
+                                          fontWeight: FontWeight.w800,
                                           color: AppTheme.textPrimary,
                                         ),
                                       ),

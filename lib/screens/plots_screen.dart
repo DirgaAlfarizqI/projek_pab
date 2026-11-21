@@ -9,6 +9,7 @@ import '../services/app_data_service.dart';
 import '../services/pdf_report_service.dart';
 import '../widgets/app_form_dialogs.dart';
 import '../widgets/tanijagung_widgets.dart';
+import '../widgets/ui_kit.dart';
 import 'expenses_screen.dart';
 import 'harvest_input_screen.dart';
 import 'seed_fertilizer_screen.dart';
@@ -39,190 +40,184 @@ class PlotsScreen extends StatelessWidget {
               ),
             ],
           ),
-          body: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              // Tombol Hijau Penuh "+ Tambah Lahan" (Persis Gambar Referensi)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => AppFormDialogs.showPlotForm(context),
-                  icon: const Icon(Icons.add_rounded, size: 22),
-                  label: const Text('Tambah Lahan'),
+          body: ResponsiveCenter(
+            maxWidth: 760,
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                // Tombol Hijau Penuh "+ Tambah Lahan"
+                StaggeredEntrance(
+                  index: 0,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => AppFormDialogs.showPlotForm(context),
+                      icon: const Icon(Icons.add_rounded, size: 22),
+                      label: const Text('Tambah Lahan'),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              if (plots.isEmpty)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
+                if (plots.isEmpty)
+                  SoftCard(
+                    radius: AppRadius.xl,
                     child: Column(
                       children: [
-                        const Icon(
-                          Icons.landscape_outlined,
-                          size: 56,
-                          color: AppTheme.textSecondary,
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Belum Ada Data Lahan',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Tambahkan lahan pertanian jagung Anda beserta luas (m² atau hektare) untuk mulai mencatat musim tanam.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppTheme.textSecondary),
-                        ),
-                        const SizedBox(height: 14),
-                        OutlinedButton(
-                          onPressed: () =>
+                        CornEmptyState(
+                          title: 'Belum Ada Data Lahan',
+                          message: 'Tambahkan lahan pertanian jagung Anda beserta luas (m² atau hektare) untuk mulai mencatat musim tanam.',
+                          actionLabel: 'Muat Data Contoh',
+                          actionIcon: Icons.auto_awesome_outlined,
+                          onAction: () =>
                               service.seedLabeledDemoDataForCurrentUser(),
-                          child: const Text('Muat Data Contoh'),
                         ),
                       ],
                     ),
-                  ),
-                )
-              else
-                ...plots.map((plot) {
-                  final plotCycles = service.getCyclesForPlot(plot.id);
-                  final activeCycle =
-                      plotCycles.where((c) => c.isActive).isNotEmpty
-                      ? plotCycles.firstWhere((c) => c.isActive)
-                      : (plotCycles.isNotEmpty ? plotCycles.first : null);
+                  )
+                else
+                  AdaptiveTwoColumn(
+                    children: List.generate(plots.length, (idx) {
+                      final plot = plots[idx];
+                      final plotCycles = service.getCyclesForPlot(plot.id);
+                      final activeCycle =
+                          plotCycles.where((c) => c.isActive).isNotEmpty
+                          ? plotCycles.firstWhere((c) => c.isActive)
+                          : (plotCycles.isNotEmpty ? plotCycles.first : null);
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                      return StaggeredEntrance(
+                        index: idx + 1,
+                        child: SoftCard(
+                          radius: AppRadius.xl,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          plot.name,
+                                          style: const TextStyle(
+                                            fontFamily: AppTheme.headingFont,
+                                            fontSize: 16.5,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppTheme.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          plot.location,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppTheme.textSecondary,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '${AppFormatters.formatAreaByPreference(plot.areaInHectares, service.currentUser!.preferredAreaUnit)} (${AppFormatters.number(plot.area)} ${plot.areaUnit})',
+                                          style: const TextStyle(
+                                            fontFamily: AppTheme.headingFont,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppTheme.primaryDarkGreen,
+                                          ),
+                                        ),
+                                        if (activeCycle != null) ...[
+                                          const SizedBox(height: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.softMintGreen,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              '${activeCycle.name} • ${activeCycle.cornVariety}',
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w700,
+                                                color:
+                                                    AppTheme.primaryDarkGreen,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: 100,
+                                    child: _PlotPhotoOrBanner(
+                                      photoPath: plot.photoPath,
+                                      height: 80,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.tonal(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppTheme.softMintGreen,
+                                    foregroundColor: AppTheme.primaryDarkGreen,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            PlotDetailScreen(plotId: plot.id),
+                                      ),
+                                    );
+                                  },
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        plot.name,
-                                        style: const TextStyle(
-                                          fontSize: 16.5,
+                                        'Lihat Detail',
+                                        style: TextStyle(
+                                          fontFamily: AppTheme.headingFont,
                                           fontWeight: FontWeight.w800,
-                                          color: AppTheme.textPrimary,
+                                          fontSize: 14,
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        plot.location,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: AppTheme.textSecondary,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                      SizedBox(width: 6),
+                                      Icon(
+                                        Icons.arrow_forward_rounded,
+                                        size: 18,
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        '${AppFormatters.formatAreaByPreference(plot.areaInHectares, service.currentUser!.preferredAreaUnit)} (${AppFormatters.number(plot.area)} ${plot.areaUnit})',
-                                        style: const TextStyle(
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w900,
-                                          color: AppTheme.primaryDarkGreen,
-                                        ),
-                                      ),
-                                      if (activeCycle != null) ...[
-                                        const SizedBox(height: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppTheme.softMintGreen,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            '${activeCycle.name} • ${activeCycle.cornVariety}',
-                                            style: const TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppTheme.primaryDarkGreen,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                // Thumbnail Foto Lahan atau Ilustrasi Ladang Jagung
-                                SizedBox(
-                                  width: 100,
-                                  child: _PlotPhotoOrBanner(
-                                    photoPath: plot.photoPath,
-                                    height: 80,
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.tonal(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppTheme.softMintGreen,
-                                  foregroundColor: AppTheme.primaryDarkGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          PlotDetailScreen(plotId: plot.id),
-                                    ),
-                                  );
-                                },
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Lihat Detail',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    SizedBox(width: 6),
-                                    Icon(Icons.arrow_forward_rounded, size: 18),
-                                  ],
-                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                }),
-              const SizedBox(height: 12),
-              const BottomCornLeavesDecoration(),
-            ],
+                      );
+                    }),
+                  ),
+                const SizedBox(height: 12),
+                const BottomCornLeavesDecoration(),
+              ],
+            ),
           ),
         );
       },
