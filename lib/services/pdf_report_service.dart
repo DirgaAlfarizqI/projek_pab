@@ -152,27 +152,38 @@ class PdfReportService {
               ],
               [
                 'Hasil Panen Aktual',
-                '${AppFormatters.number(summary.totalHarvestTons)} ton (${AppFormatters.number(summary.totalHarvestKg)} kg)',
+                summary.hasHarvestData
+                    ? '${AppFormatters.formatWeightByPreference(summary.totalHarvestTons, user.preferredWeightUnit)} (${AppFormatters.number(summary.totalHarvestKg)} kg)'
+                    : 'Menunggu data panen',
               ],
               [
                 'Rata-rata Harga Jual per Kg',
-                '${AppFormatters.currency(summary.averageSellingPricePerKg)} / kg',
+                summary.hasHarvestData
+                    ? '${AppFormatters.currency(summary.averageSellingPricePerKg)} / kg'
+                    : 'Menunggu data panen',
               ],
               [
                 'Total Pendapatan Kotor',
-                AppFormatters.currency(summary.totalRevenue),
+                summary.hasHarvestData
+                    ? AppFormatters.currency(summary.totalRevenue)
+                    : 'Menunggu data panen',
               ],
               [
-                'Keuntungan / Kerugian Bersih (${summary.financialStatus})',
-                AppFormatters.currency(summary.netProfitOrLoss),
+                'Status Keuangan (${summary.financialStatus})',
+                summary.hasHarvestData
+                    ? AppFormatters.currency(summary.netProfitOrLoss)
+                    : 'Menunggu data panen',
               ],
-              [
-                'Persentase Keuntungan terhadap Biaya',
-                '${AppFormatters.number(summary.profitPercentage)}%',
-              ],
+              if (summary.hasHarvestData)
+                [
+                  'Persentase Keuntungan terhadap Biaya',
+                  '${AppFormatters.number(summary.profitPercentage)}%',
+                ],
               [
                 'Biaya Produksi / Harga Impas per Kg',
-                '${AppFormatters.currency(summary.breakEvenPricePerKg)} / kg',
+                summary.hasHarvestData
+                    ? '${AppFormatters.currency(summary.breakEvenPricePerKg)} / kg'
+                    : 'Menunggu data panen',
               ],
               [
                 'Produktivitas per Hektare',

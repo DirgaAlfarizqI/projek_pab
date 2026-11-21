@@ -34,7 +34,7 @@ class _SeedFertilizerScreenState extends State<SeedFertilizerScreen> {
   final _seedPriceCtrl = TextEditingController(text: '24000');
   DateTime _seedBuyDate = DateTime.now();
   final _seedNotesCtrl = TextEditingController();
-  bool _seedFromPaidStock = false;
+  final bool _seedFromPaidStock = false;
 
   // Controllers Tab Pupuk
   final _fertNameCtrl = TextEditingController();
@@ -408,25 +408,7 @@ class _SeedFertilizerScreenState extends State<SeedFertilizerScreen> {
                             hintText: 'Contoh: Benih unggul hibrida',
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: _seedFromPaidStock,
-                          onChanged: (v) =>
-                              setState(() => _seedFromPaidStock = v ?? false),
-                          title: const Text(
-                            'Diambil dari stok gudang yang sudah dibayar',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          subtitle: const Text(
-                            'Mencegah penghitungan biaya dua kali pada pengeluaran.',
-                            style: TextStyle(fontSize: 11),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(

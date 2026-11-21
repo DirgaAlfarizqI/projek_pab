@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/constants/app_constants.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/formatters.dart';
 import '../models/app_models.dart';
@@ -1084,10 +1085,11 @@ class AppFormDialogs {
     );
   }
 
-  /// Form Pencatatan Seluruh Pengeluaran (Expense) dengan Bukti Transaksi Kamera/Galeri
+  /// Form Pencatatan Seluruh Pengeluaran (Expense) dengan Bukti Transaksi & Integrasi Stok Pupuk
   static Future<ExpenseModel?> showExpenseForm(
     BuildContext context, {
     String? preselectedCycleId,
+    ExpenseModel? existingExpense,
   }) async {
     final service = AppDataService();
     if (service.cycles.isEmpty) {
@@ -1102,16 +1104,33 @@ class AppFormDialogs {
     }
 
     final formKey = GlobalKey<FormState>();
-    String selectedCycleId = preselectedCycleId ?? service.cycles.first.id;
-    String category = 'Tenaga kerja';
-    String unit = 'paket';
-    DateTime date = DateTime.now();
+    String selectedCycleId =
+        existingExpense?.cycleId ??
+        preselectedCycleId ??
+        service.cycles.first.id;
+    String category = existingExpense != null
+        ? AppConstants.normalizeExpenseCategory(existingExpense.category)
+        : 'Pupuk';
+    String unit = existingExpense?.unit ?? 'kg';
+    DateTime date = existingExpense?.date ?? DateTime.now();
 
-    final nameCtrl = TextEditingController();
-    final qtyCtrl = TextEditingController(text: '1');
-    final priceCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    String? receiptPhotoPath;
+    bool takeFromStock = existingExpense?.isFromFertilizerStock ?? false;
+    final fertilizerStocks = service.inventory;
+    String? selectedInventoryId =
+        existingExpense?.linkedInventoryId ??
+        (fertilizerStocks.isNotEmpty ? fertilizerStocks.first.id : null);
+
+    final nameCtrl = TextEditingController(text: existingExpense?.name ?? '');
+    final qtyCtrl = TextEditingController(
+      text: existingExpense != null ? existingExpense.quantity.toString() : '1',
+    );
+    final priceCtrl = TextEditingController(
+      text: existingExpense != null && !existingExpense.isFromFertilizerStock
+          ? existingExpense.unitPrice.round().toString()
+          : '',
+    );
+    final notesCtrl = TextEditingController(text: existingExpense?.notes ?? '');
+    String? receiptPhotoPath = existingExpense?.receiptPhotoPath;
 
     return showModalBottomSheet<ExpenseModel>(
       context: context,
@@ -1120,10 +1139,33 @@ class AppFormDialogs {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
+            final isFertilizer = category == 'Pupuk';
+            final effectiveTakeFromStock = isFertilizer && takeFromStock;
+            InventoryItemModel? selectedStockItem;
+            if (selectedInventoryId != null) {
+              try {
+                selectedStockItem = fertilizerStocks.firstWhere(
+                  (s) => s.id == selectedInventoryId,
+                );
+              } catch (_) {
+                selectedStockItem = null;
+              }
+            }
+
+            // Jika sedang mengedit pengeluaran yang sebelumnya sudah mengambil dari stok yang sama,
+            // maka batas maksimum stok yang bisa diambil adalah sisa stok saat ini + jumlah yang sebelumnya diambil
+            double maxAvailableStock = selectedStockItem?.remainingStock ?? 0.0;
+            if (existingExpense != null &&
+                existingExpense.isFromFertilizerStock &&
+                existingExpense.linkedInventoryId == selectedStockItem?.id) {
+              maxAvailableStock += existingExpense.stockTakenQuantity;
+            }
+
             final qty = AppFormatters.parsePositiveDouble(qtyCtrl.text) ?? 0.0;
-            final price =
-                AppFormatters.parsePositiveDouble(priceCtrl.text) ?? 0.0;
-            final totalCost = qty * price;
+            final price = effectiveTakeFromStock
+                ? 0.0
+                : (AppFormatters.parsePositiveDouble(priceCtrl.text) ?? 0.0);
+            final totalCost = effectiveTakeFromStock ? 0.0 : (qty * price);
 
             return Container(
               padding: EdgeInsets.only(
@@ -1146,10 +1188,12 @@ class AppFormDialogs {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Catat Pengeluaran',
-                              style: TextStyle(
+                              existingExpense == null
+                                  ? 'Catat Pengeluaran'
+                                  : 'Edit Pengeluaran',
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
                                 color: AppTheme.textPrimary,
@@ -1196,46 +1240,23 @@ class AppFormDialogs {
                               decoration: const InputDecoration(
                                 labelText: 'Kategori *',
                               ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'Benih',
-                                  child: Text('Benih'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Pupuk',
-                                  child: Text('Pupuk'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Pestisida',
-                                  child: Text('Pestisida'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Pengolahan lahan',
-                                  child: Text('Pengolahan lahan'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Tenaga kerja',
-                                  child: Text('Tenaga kerja'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Sewa alat',
-                                  child: Text('Sewa alat'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Transportasi',
-                                  child: Text('Transportasi'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Biaya panen',
-                                  child: Text('Biaya panen'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Lain-lain',
-                                  child: Text('Lainnya'),
-                                ),
-                              ],
+                              items: AppConstants.expenseCategories
+                                  .map(
+                                    (cat) => DropdownMenuItem(
+                                      value: cat,
+                                      child: Text(cat),
+                                    ),
+                                  )
+                                  .toList(),
                               onChanged: (val) {
-                                if (val != null) setState(() => category = val);
+                                if (val != null) {
+                                  setState(() {
+                                    category = val;
+                                    if (val != 'Pupuk') {
+                                      takeFromStock = false;
+                                    }
+                                  });
+                                }
                               },
                             ),
                           ),
@@ -1263,12 +1284,129 @@ class AppFormDialogs {
                           ),
                         ],
                       ),
+
+                      // Opsi Sumber Pupuk: "Beli baru" atau "Ambil dari stok" (Revisi 6b)
+                      if (isFertilizer) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.lightGreen,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Sumber Pupuk',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.darkGreen,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ChoiceChip(
+                                      label: const SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Beli Baru',
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      selected: !takeFromStock,
+                                      onSelected: (_) =>
+                                          setState(() => takeFromStock = false),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: ChoiceChip(
+                                      label: const SizedBox(
+                                        width: double.infinity,
+                                        child: Text(
+                                          'Ambil dari Stok',
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                      selected: takeFromStock,
+                                      onSelected: (_) {
+                                        setState(() {
+                                          takeFromStock = true;
+                                          if (selectedInventoryId == null &&
+                                              fertilizerStocks.isNotEmpty) {
+                                            selectedInventoryId =
+                                                fertilizerStocks.first.id;
+                                          }
+                                          if (selectedStockItem != null &&
+                                              nameCtrl.text.trim().isEmpty) {
+                                            nameCtrl.text =
+                                                'Pemakaian ${selectedStockItem.itemName}';
+                                            unit = selectedStockItem.unit;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (takeFromStock) ...[
+                                const SizedBox(height: 10),
+                                if (fertilizerStocks.isEmpty)
+                                  const Text(
+                                    'Belum ada stok pupuk tersedia di halaman Stok Pupuk. Silakan tambah stok pupuk terlebih dahulu atau pilih "Beli Baru".',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.dangerRed,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  )
+                                else
+                                  DropdownButtonFormField<String>(
+                                    initialValue: selectedInventoryId,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText:
+                                          'Pilih Jenis Pupuk dari Stok *',
+                                    ),
+                                    items: fertilizerStocks.map((inv) {
+                                      return DropdownMenuItem(
+                                        value: inv.id,
+                                        child: Text(
+                                          '${inv.itemName} - tersedia ${AppFormatters.number(inv.remainingStock)} ${inv.unit}',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        final chosen = fertilizerStocks
+                                            .firstWhere((e) => e.id == val);
+                                        setState(() {
+                                          selectedInventoryId = val;
+                                          unit = chosen.unit;
+                                          nameCtrl.text =
+                                              'Pemakaian ${chosen.itemName}';
+                                        });
+                                      }
+                                    },
+                                  ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: nameCtrl,
                         decoration: const InputDecoration(
                           labelText: 'Nama Transaksi *',
-                          hintText: 'Contoh: Upah Tenaga Kerja / Sewa Traktor',
+                          hintText:
+                              'Contoh: Pupuk Urea / Pestisida / Lain-lain',
                           prefixIcon: Icon(Icons.receipt_long_outlined),
                         ),
                         validator: (v) => (v == null || v.trim().isEmpty)
@@ -1288,13 +1426,25 @@ class AppFormDialogs {
                                     decimal: true,
                                   ),
                               onChanged: (_) => setState(() {}),
-                              decoration: const InputDecoration(
-                                labelText: 'Jumlah *',
+                              decoration: InputDecoration(
+                                labelText: effectiveTakeFromStock
+                                    ? 'Jumlah Diambil *'
+                                    : 'Jumlah *',
                               ),
-                              validator: (v) =>
-                                  AppFormatters.parsePositiveDouble(v) == null
-                                  ? 'Wajib > 0'
-                                  : null,
+                              validator: (v) {
+                                final parsed =
+                                    AppFormatters.parsePositiveDouble(v);
+                                if (parsed == null) return 'Wajib > 0';
+                                if (effectiveTakeFromStock) {
+                                  if (selectedStockItem == null) {
+                                    return 'Pilih stok pupuk';
+                                  }
+                                  if (parsed > maxAvailableStock) {
+                                    return 'Maks ${AppFormatters.number(maxAvailableStock)} ${selectedStockItem.unit}';
+                                  }
+                                }
+                                return null;
+                              },
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1308,16 +1458,16 @@ class AppFormDialogs {
                               ),
                               items: const [
                                 DropdownMenuItem(
+                                  value: 'kg',
+                                  child: Text('kg'),
+                                ),
+                                DropdownMenuItem(
                                   value: 'paket',
                                   child: Text('paket'),
                                 ),
                                 DropdownMenuItem(
                                   value: 'hari',
                                   child: Text('hari'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'kg',
-                                  child: Text('kg'),
                                 ),
                                 DropdownMenuItem(
                                   value: 'liter',
@@ -1332,29 +1482,35 @@ class AppFormDialogs {
                                   child: Text('unit'),
                                 ),
                               ],
-                              onChanged: (val) {
-                                if (val != null) setState(() => unit = val);
-                              },
+                              onChanged: effectiveTakeFromStock
+                                  ? null
+                                  : (val) {
+                                      if (val != null) {
+                                        setState(() => unit = val);
+                                      }
+                                    },
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: priceCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                      if (!effectiveTakeFromStock) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: priceCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          onChanged: (_) => setState(() {}),
+                          decoration: const InputDecoration(
+                            labelText: 'Harga Satuan (Rp) *',
+                            prefixIcon: Icon(Icons.payments_outlined),
+                          ),
+                          validator: (v) =>
+                              AppFormatters.parsePositiveDouble(v) == null
+                              ? 'Wajib > 0'
+                              : null,
                         ),
-                        onChanged: (_) => setState(() {}),
-                        decoration: const InputDecoration(
-                          labelText: 'Harga Satuan (Rp) *',
-                          prefixIcon: Icon(Icons.payments_outlined),
-                        ),
-                        validator: (v) =>
-                            AppFormatters.parsePositiveDouble(v) == null
-                            ? 'Wajib > 0'
-                            : null,
-                      ),
+                      ],
                       const SizedBox(height: 10),
                       Container(
                         width: double.infinity,
@@ -1363,23 +1519,43 @@ class AppFormDialogs {
                           color: AppTheme.lightGreen,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Flexible(
-                              child: Text(
-                                'Total Biaya Otomatis:',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    effectiveTakeFromStock
+                                        ? 'Biaya Pengeluaran Baru (Dari Stok):'
+                                        : 'Total Biaya Otomatis:',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  AppFormatters.currency(totalCost),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.darkGreen,
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              AppFormatters.currency(totalCost),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.darkGreen,
+                            if (effectiveTakeFromStock &&
+                                selectedStockItem != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Stok ${selectedStockItem.itemName} akan berkurang ${AppFormatters.number(qty)} ${selectedStockItem.unit}. Dicatat Rp0 agar tidak terhitung ganda dengan biaya pembelian stok.',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppTheme.textSecondary,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -1403,26 +1579,74 @@ class AppFormDialogs {
                           onPressed: () async {
                             if (!formKey.currentState!.validate()) return;
                             final cyc = service.getCycleById(selectedCycleId)!;
-                            final created = await service.addExpense(
-                              plotId: cyc.plotId,
-                              cycleId: cyc.id,
-                              name: nameCtrl.text,
-                              category: category,
-                              date: date,
-                              quantity: AppFormatters.parsePositiveDouble(
-                                qtyCtrl.text,
-                              )!,
-                              unit: unit,
-                              unitPrice: AppFormatters.parsePositiveDouble(
-                                priceCtrl.text,
-                              )!,
-                              notes: notesCtrl.text,
-                              receiptPhotoPath: receiptPhotoPath,
-                            );
-                            if (ctx.mounted) Navigator.pop(ctx, created);
+                            final parsedQty = AppFormatters.parsePositiveDouble(
+                              qtyCtrl.text,
+                            )!;
+                            final parsedPrice = effectiveTakeFromStock
+                                ? 0.0
+                                : AppFormatters.parsePositiveDouble(
+                                    priceCtrl.text,
+                                  )!;
+
+                            if (existingExpense == null) {
+                              final created = await service.addExpense(
+                                plotId: cyc.plotId,
+                                cycleId: cyc.id,
+                                name: nameCtrl.text,
+                                category: category,
+                                date: date,
+                                quantity: parsedQty,
+                                unit:
+                                    effectiveTakeFromStock &&
+                                        selectedStockItem != null
+                                    ? selectedStockItem.unit
+                                    : unit,
+                                unitPrice: parsedPrice,
+                                notes: notesCtrl.text,
+                                receiptPhotoPath: receiptPhotoPath,
+                                isFromFertilizerStock: effectiveTakeFromStock,
+                                linkedInventoryId: effectiveTakeFromStock
+                                    ? selectedInventoryId
+                                    : null,
+                                stockTakenQuantity: effectiveTakeFromStock
+                                    ? parsedQty
+                                    : 0.0,
+                              );
+                              if (ctx.mounted) Navigator.pop(ctx, created);
+                            } else {
+                              final updated = existingExpense.copyWith(
+                                plotId: cyc.plotId,
+                                cycleId: cyc.id,
+                                name: nameCtrl.text.trim(),
+                                category: category,
+                                date: date,
+                                quantity: parsedQty,
+                                unit:
+                                    effectiveTakeFromStock &&
+                                        selectedStockItem != null
+                                    ? selectedStockItem.unit
+                                    : unit,
+                                unitPrice: parsedPrice,
+                                notes: notesCtrl.text.trim(),
+                                receiptPhotoPath: receiptPhotoPath,
+                                isFromFertilizerStock: effectiveTakeFromStock,
+                                linkedInventoryId: effectiveTakeFromStock
+                                    ? selectedInventoryId
+                                    : null,
+                                stockTakenQuantity: effectiveTakeFromStock
+                                    ? parsedQty
+                                    : 0.0,
+                              );
+                              await service.updateExpense(updated);
+                              if (ctx.mounted) Navigator.pop(ctx, updated);
+                            }
                           },
                           icon: const Icon(Icons.check_circle_outline),
-                          label: const Text('Simpan Pengeluaran'),
+                          label: Text(
+                            existingExpense == null
+                                ? 'Simpan Pengeluaran'
+                                : 'Perbarui Pengeluaran',
+                          ),
                         ),
                       ),
                     ],

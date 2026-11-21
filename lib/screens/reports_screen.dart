@@ -207,12 +207,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         itemBuilder: (context, idx) {
                           final s = summaries[idx];
                           final c = s.cycle;
+                          final user = service.currentUser!;
+                          final hasHarvest = s.hasHarvestData;
                           final isProfit = s.financialStatus == 'UNTUNG';
-                          final statusLabel = isProfit
-                              ? 'Untung'
-                              : (s.financialStatus == 'RUGI'
-                                    ? 'Rugi'
-                                    : 'Impas');
+                          final statusLabel = !hasHarvest
+                              ? 'Belum Panen'
+                              : (isProfit
+                                    ? 'Untung'
+                                    : (s.financialStatus == 'RUGI'
+                                          ? 'Rugi'
+                                          : 'Impas'));
 
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
@@ -241,22 +245,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                             ),
                                             const SizedBox(height: 3),
                                             Text(
-                                              '$statusLabel • ${AppFormatters.currency(s.netProfitOrLoss)}',
+                                              hasHarvest
+                                                  ? '$statusLabel • ${AppFormatters.currency(s.netProfitOrLoss)}'
+                                                  : '$statusLabel • Pengeluaran ${AppFormatters.currency(s.totalExpenses)}',
                                               style: TextStyle(
                                                 fontSize: 13.5,
                                                 fontWeight: FontWeight.w800,
-                                                color: isProfit
-                                                    ? AppTheme.leafGreen
-                                                    : (s.financialStatus ==
-                                                              'RUGI'
-                                                          ? AppTheme.dangerRed
-                                                          : AppTheme
-                                                                .textSecondary),
+                                                color: !hasHarvest
+                                                    ? AppTheme.textSecondary
+                                                    : (isProfit
+                                                          ? AppTheme.leafGreen
+                                                          : (s.financialStatus ==
+                                                                    'RUGI'
+                                                                ? AppTheme
+                                                                      .dangerRed
+                                                                : AppTheme
+                                                                      .textSecondary)),
                                               ),
                                             ),
                                             const SizedBox(height: 3),
                                             Text(
-                                              '${s.plot?.name ?? "-"} • Panen: ${AppFormatters.number(s.totalHarvestTons)} Ton • Biaya: ${AppFormatters.currency(s.totalExpenses)}',
+                                              '${s.plot?.name ?? "-"} • Panen: ${AppFormatters.formatWeightByPreference(s.totalHarvestTons, user.preferredWeightUnit)} • Biaya: ${AppFormatters.currency(s.totalExpenses)}',
                                               style: const TextStyle(
                                                 fontSize: 11.5,
                                                 color: AppTheme.textSecondary,
@@ -375,15 +384,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             _DetailLine(
               'Hasil Panen Aktual',
-              '${AppFormatters.number(s.totalHarvestTons)} Ton (${AppFormatters.number(s.totalHarvestKg)} kg)',
+              s.hasHarvestData
+                  ? '${AppFormatters.formatWeightByPreference(s.totalHarvestTons, AppDataService().currentUser!.preferredWeightUnit)} (${AppFormatters.number(s.totalHarvestKg)} kg)'
+                  : 'Menunggu data panen',
             ),
             _DetailLine(
               'Total Pendapatan',
-              AppFormatters.currency(s.totalRevenue),
+              s.hasHarvestData
+                  ? AppFormatters.currency(s.totalRevenue)
+                  : 'Menunggu data panen',
             ),
             _DetailLine(
-              'Keuntungan / Kerugian (${s.financialStatus})',
-              AppFormatters.currency(s.netProfitOrLoss),
+              'Status Keuangan',
+              s.hasHarvestData
+                  ? '${s.financialStatus} (${AppFormatters.currency(s.netProfitOrLoss)})'
+                  : 'Menunggu data panen',
               bold: true,
             ),
             _DetailLine(

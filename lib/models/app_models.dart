@@ -1,4 +1,6 @@
 // Entitas database terstruktur untuk TaniJagung
+import '../core/constants/app_constants.dart';
+
 // Mengakomodasi:
 // - users
 // - farms
@@ -25,6 +27,7 @@ class UserModel {
   final String currencyCode; // 'IDR'
   final String predictionApiUrl;
   final String? profilePhotoPath;
+  final double initialCapital; // Modal Awal Usaha Tani di Dashboard Beranda
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -38,8 +41,9 @@ class UserModel {
     this.preferredWeightUnit = 'ton',
     this.notificationsEnabled = true,
     this.currencyCode = 'IDR',
-    this.predictionApiUrl = 'http://127.0.0.1:8000',
+    this.predictionApiUrl = AppConstants.internalPredictionApiUrl,
     this.profilePhotoPath,
+    this.initialCapital = 0.0,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -56,6 +60,7 @@ class UserModel {
     String? predictionApiUrl,
     String? profilePhotoPath,
     bool clearProfilePhoto = false,
+    double? initialCapital,
     DateTime? updatedAt,
   }) {
     return UserModel(
@@ -72,6 +77,7 @@ class UserModel {
       profilePhotoPath: clearProfilePhoto
           ? null
           : (profilePhotoPath ?? this.profilePhotoPath),
+      initialCapital: initialCapital ?? this.initialCapital,
       createdAt: createdAt,
       updatedAt: updatedAt ?? DateTime.now(),
     );
@@ -89,6 +95,7 @@ class UserModel {
     'currencyCode': currencyCode,
     'predictionApiUrl': predictionApiUrl,
     'profilePhotoPath': profilePhotoPath,
+    'initialCapital': initialCapital,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
@@ -103,8 +110,10 @@ class UserModel {
     preferredWeightUnit: map['preferredWeightUnit'] ?? 'ton',
     notificationsEnabled: map['notificationsEnabled'] ?? true,
     currencyCode: map['currencyCode'] ?? 'IDR',
-    predictionApiUrl: map['predictionApiUrl'] ?? 'http://127.0.0.1:8000',
+    predictionApiUrl:
+        map['predictionApiUrl'] ?? AppConstants.internalPredictionApiUrl,
     profilePhotoPath: map['profilePhotoPath'],
+    initialCapital: (map['initialCapital'] as num?)?.toDouble() ?? 0.0,
     createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
     updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
   );
@@ -522,6 +531,9 @@ class ExpenseModel {
   final String notes;
   final String? receiptPhotoPath;
   final String? sourceReferenceId; // Mencegah penghitungan ganda dari crop_input atau activity
+  final bool isFromFertilizerStock;
+  final String? linkedInventoryId;
+  final double stockTakenQuantity;
   final bool isDemo;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -532,7 +544,7 @@ class ExpenseModel {
     required this.plotId,
     required this.cycleId,
     required this.name,
-    required this.category,
+    required String category,
     required this.date,
     required this.quantity,
     required this.unit,
@@ -540,12 +552,59 @@ class ExpenseModel {
     this.notes = '',
     this.receiptPhotoPath,
     this.sourceReferenceId,
+    this.isFromFertilizerStock = false,
+    this.linkedInventoryId,
+    this.stockTakenQuantity = 0.0,
     this.isDemo = false,
     required this.createdAt,
     required this.updatedAt,
-  });
+  }) : category = AppConstants.normalizeExpenseCategory(category);
 
-  double get totalCost => quantity * unitPrice;
+  double get totalCost => isFromFertilizerStock ? 0.0 : (quantity * unitPrice);
+
+  ExpenseModel copyWith({
+    String? plotId,
+    String? cycleId,
+    String? name,
+    String? category,
+    DateTime? date,
+    double? quantity,
+    String? unit,
+    double? unitPrice,
+    String? notes,
+    String? receiptPhotoPath,
+    String? sourceReferenceId,
+    bool? isFromFertilizerStock,
+    String? linkedInventoryId,
+    double? stockTakenQuantity,
+    bool? isDemo,
+    DateTime? updatedAt,
+  }) {
+    return ExpenseModel(
+      id: id,
+      userId: userId,
+      plotId: plotId ?? this.plotId,
+      cycleId: cycleId ?? this.cycleId,
+      name: name ?? this.name,
+      category: category != null
+          ? AppConstants.normalizeExpenseCategory(category)
+          : this.category,
+      date: date ?? this.date,
+      quantity: quantity ?? this.quantity,
+      unit: unit ?? this.unit,
+      unitPrice: unitPrice ?? this.unitPrice,
+      notes: notes ?? this.notes,
+      receiptPhotoPath: receiptPhotoPath ?? this.receiptPhotoPath,
+      sourceReferenceId: sourceReferenceId ?? this.sourceReferenceId,
+      isFromFertilizerStock:
+          isFromFertilizerStock ?? this.isFromFertilizerStock,
+      linkedInventoryId: linkedInventoryId ?? this.linkedInventoryId,
+      stockTakenQuantity: stockTakenQuantity ?? this.stockTakenQuantity,
+      isDemo: isDemo ?? this.isDemo,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
 
   Map<String, dynamic> toMap() => {
     'id': id,
@@ -562,6 +621,9 @@ class ExpenseModel {
     'notes': notes,
     'receipt_photo_path': receiptPhotoPath,
     'source_reference_id': sourceReferenceId,
+    'is_from_fertilizer_stock': isFromFertilizerStock,
+    'linked_inventory_id': linkedInventoryId,
+    'stock_taken_quantity': stockTakenQuantity,
     'is_demo': isDemo,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
@@ -573,7 +635,9 @@ class ExpenseModel {
     plotId: map['plot_id'] ?? '',
     cycleId: map['cycle_id'] ?? '',
     name: map['name'] ?? '',
-    category: map['category'] ?? 'Biaya lainnya',
+    category: AppConstants.normalizeExpenseCategory(
+      map['category'] ?? 'Lain-lain',
+    ),
     date: DateTime.tryParse(map['date'] ?? '') ?? DateTime.now(),
     quantity: (map['quantity'] as num?)?.toDouble() ?? 0.0,
     unit: map['unit'] ?? 'unit',
@@ -581,6 +645,10 @@ class ExpenseModel {
     notes: map['notes'] ?? '',
     receiptPhotoPath: map['receipt_photo_path'],
     sourceReferenceId: map['source_reference_id'],
+    isFromFertilizerStock: map['is_from_fertilizer_stock'] ?? false,
+    linkedInventoryId: map['linked_inventory_id'],
+    stockTakenQuantity:
+        (map['stock_taken_quantity'] as num?)?.toDouble() ?? 0.0,
     isDemo: map['is_demo'] ?? false,
     createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
     updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
@@ -1128,6 +1196,116 @@ class AppNotificationModel {
         relatedId: map['related_id'],
         date: DateTime.tryParse(map['date'] ?? '') ?? DateTime.now(),
         isRead: map['is_read'] ?? false,
+        createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
+        updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
+      );
+}
+
+/// Entitas `scheduled_reminders` (Pengingat Jadwal Buatan Pengguna untuk Penyiraman, Pemupukan, dll.)
+class ScheduledReminderModel {
+  final String id;
+  final String userId;
+  final String
+  activityType; // Penyiraman, Pemupukan, Penyemprotan, Perawatan Lahan, Lainnya
+  final String? plotId;
+  final DateTime scheduledDateTime;
+  final String repeatType; // Sekali, Harian, Mingguan, Interval Hari
+  final int intervalDays;
+  final String notes;
+  final bool isEnabled;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  ScheduledReminderModel({
+    required this.id,
+    required this.userId,
+    required this.activityType,
+    this.plotId,
+    required this.scheduledDateTime,
+    this.repeatType = 'Sekali',
+    this.intervalDays = 1,
+    this.notes = '',
+    this.isEnabled = true,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  /// Menghitung waktu pengingat mendatang berikutnya berdasarkan tanggal, jam, dan pola pengulangan
+  DateTime get nextOccurrence {
+    final now = DateTime.now();
+    if (scheduledDateTime.isAfter(now) || repeatType == 'Sekali') {
+      return scheduledDateTime;
+    }
+
+    int stepDays = 1;
+    if (repeatType == 'Harian') {
+      stepDays = 1;
+    } else if (repeatType == 'Mingguan') {
+      stepDays = 7;
+    } else if (repeatType == 'Interval Hari') {
+      stepDays = intervalDays < 1 ? 1 : intervalDays;
+    }
+
+    DateTime candidate = scheduledDateTime;
+    while (!candidate.isAfter(now)) {
+      candidate = candidate.add(Duration(days: stepDays));
+    }
+    return candidate;
+  }
+
+  ScheduledReminderModel copyWith({
+    String? activityType,
+    String? plotId,
+    bool clearPlotId = false,
+    DateTime? scheduledDateTime,
+    String? repeatType,
+    int? intervalDays,
+    String? notes,
+    bool? isEnabled,
+    DateTime? updatedAt,
+  }) {
+    return ScheduledReminderModel(
+      id: id,
+      userId: userId,
+      activityType: activityType ?? this.activityType,
+      plotId: clearPlotId ? null : (plotId ?? this.plotId),
+      scheduledDateTime: scheduledDateTime ?? this.scheduledDateTime,
+      repeatType: repeatType ?? this.repeatType,
+      intervalDays: intervalDays ?? this.intervalDays,
+      notes: notes ?? this.notes,
+      isEnabled: isEnabled ?? this.isEnabled,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'user_id': userId,
+    'activity_type': activityType,
+    'plot_id': plotId,
+    'scheduled_date_time': scheduledDateTime.toIso8601String(),
+    'repeat_type': repeatType,
+    'interval_days': intervalDays,
+    'notes': notes,
+    'is_enabled': isEnabled,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+  };
+
+  factory ScheduledReminderModel.fromMap(Map<String, dynamic> map) =>
+      ScheduledReminderModel(
+        id: map['id'] ?? '',
+        userId: map['user_id'] ?? '',
+        activityType: map['activity_type'] ?? 'Penyiraman',
+        plotId: map['plot_id'],
+        scheduledDateTime:
+            DateTime.tryParse(map['scheduled_date_time'] ?? '') ??
+            DateTime.now().add(const Duration(hours: 1)),
+        repeatType: map['repeat_type'] ?? 'Sekali',
+        intervalDays: (map['interval_days'] as num?)?.toInt() ?? 1,
+        notes: map['notes'] ?? '',
+        isEnabled: map['is_enabled'] ?? true,
         createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
         updatedAt: DateTime.tryParse(map['updated_at'] ?? '') ?? DateTime.now(),
       );

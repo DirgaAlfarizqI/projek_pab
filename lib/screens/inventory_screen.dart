@@ -6,21 +6,13 @@ import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../widgets/tanijagung_widgets.dart';
 
-/// HALAMAN 16: STOK BENIH DAN PUPUK (Sesuai Gambar Referensi Baris 3 Kolom 4)
-/// - Pill Switcher: "Benih" | "Pupuk"
-/// - Kartu Produk dengan Ikon Karung Hijau, Nama Produk, "Stok Tersedia 20 kg", Badge Kuning/Oranye "⚠ Stok menipis" (jika di bawah batas minimum)
-/// - Detail Rumus: Stok Akhir = Stok Awal + Stok Masuk - Stok Keluar
-/// - Tombol Hijau Penuh "+ Tambah Stok" & Riwayat Transaksi
-class InventoryScreen extends StatefulWidget {
+/// HALAMAN STOK PUPUK (Revisi 6: Stok Benih dihapus sepenuhnya, fokus Stok Pupuk & terhubung ke Pengeluaran)
+/// - Tanpa Tab Benih/Pupuk (Hanya Stok Pupuk)
+/// - Menampilkan jumlah stok tersedia per jenis pupuk dengan jelas
+/// - Peringatan visual saat stok habis atau di bawah batas minimum
+/// - Rumus: Stok Akhir = Stok Awal + Stok Masuk - Stok Keluar
+class InventoryScreen extends StatelessWidget {
   const InventoryScreen({super.key});
-
-  @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
-}
-
-class _InventoryScreenState extends State<InventoryScreen> {
-  int _selectedTab =
-      1; // Default tampilkan Pupuk (atau Benih = 0) seperti referensi
 
   @override
   Widget build(BuildContext context) {
@@ -28,52 +20,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
       listenable: AppDataService(),
       builder: (context, _) {
         final service = AppDataService();
-        final allItems = service.inventory;
-        final filteredItems = allItems.where((item) {
-          if (_selectedTab == 0) {
-            return item.itemType.toLowerCase() == 'benih';
-          }
-          return item.itemType.toLowerCase() != 'benih';
-        }).toList();
-
+        final fertilizerItems = service.inventory;
         final transactions = service.inventoryTransactions;
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Stok Benih & Pupuk')),
+          appBar: AppBar(title: const Text('Stok Pupuk')),
           body: ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              // Pill Switcher: Benih | Pupuk (Persis Gambar Referensi Baris 3 Kolom 4)
-              PillSegmentedSwitch(
-                leftLabel: 'Benih',
-                rightLabel: 'Pupuk',
-                selectedIndex: _selectedTab,
-                onChanged: (idx) => setState(() => _selectedTab = idx),
-              ),
-              const SizedBox(height: 18),
-
-              if (filteredItems.isEmpty)
+              if (fertilizerItems.isEmpty)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(22),
                     child: Column(
-                      children: [
-                        const Icon(
+                      children: const [
+                        Icon(
                           Icons.inventory_2_outlined,
                           size: 48,
                           color: AppTheme.textSecondary,
                         ),
-                        const SizedBox(height: 10),
+                        SizedBox(height: 10),
                         Text(
-                          'Belum Ada Stok ${_selectedTab == 0 ? "Benih" : "Pupuk"}',
-                          style: const TextStyle(
+                          'Belum Ada Stok Pupuk',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Tambahkan stok awal dan batas minimum peringatan untuk memantau sisa persediaan.',
+                        SizedBox(height: 6),
+                        Text(
+                          'Tambahkan stok pupuk beserta batas minimum peringatan untuk memantau sisa persediaan dan menghubungkannya dengan form pengeluaran.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: AppTheme.textSecondary),
                         ),
@@ -82,7 +58,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 )
               else
-                ...filteredItems.map((item) {
+                ...fertilizerItems.map((item) {
                   final isLow = item.isLowStock || item.isOutOfStock;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
@@ -95,21 +71,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Ikon Karung Hijau (Persis Gambar Referensi)
                                 Container(
-                                  width: 64,
-                                  height: 64,
+                                  width: 60,
+                                  height: 60,
                                   decoration: BoxDecoration(
-                                    color: AppTheme.lightLeafGreen,
+                                    color: isLow
+                                        ? AppTheme.cornYellowLight
+                                        : AppTheme.lightLeafGreen,
                                     borderRadius: BorderRadius.circular(16),
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.inventory_2_rounded,
-                                    size: 34,
-                                    color: AppTheme.primaryDarkGreen,
+                                    size: 32,
+                                    color: isLow
+                                        ? const Color(0xFFB45309)
+                                        : AppTheme.primaryDarkGreen,
                                   ),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -143,7 +122,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                         ],
                                       ),
                                       const Text(
-                                        'Stok Tersedia',
+                                        'Stok Pupuk Tersedia',
                                         style: TextStyle(
                                           fontSize: 13,
                                           color: AppTheme.textSecondary,
@@ -166,7 +145,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                             vertical: 5,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: AppTheme.cornYellowLight,
+                                            color: item.isOutOfStock
+                                                ? AppTheme.dangerLight
+                                                : AppTheme.cornYellowLight,
                                             borderRadius: BorderRadius.circular(
                                               10,
                                             ),
@@ -174,20 +155,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              const Icon(
+                                              Icon(
                                                 Icons.warning_amber_rounded,
                                                 size: 16,
-                                                color: Color(0xFFD97706),
+                                                color: item.isOutOfStock
+                                                    ? AppTheme.dangerRed
+                                                    : const Color(0xFFD97706),
                                               ),
                                               const SizedBox(width: 6),
-                                              Text(
-                                                item.isOutOfStock
-                                                    ? 'Stok habis'
-                                                    : 'Stok menipis (Min: ${AppFormatters.number(item.minimumStockAlert)} ${item.unit})',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: Color(0xFFB45309),
+                                              Flexible(
+                                                child: Text(
+                                                  item.isOutOfStock
+                                                      ? 'Stok pupuk habis'
+                                                      : 'Stok menipis (Batas min: ${AppFormatters.number(item.minimumStockAlert)} ${item.unit})',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: item.isOutOfStock
+                                                        ? AppTheme.dangerRed
+                                                        : const Color(
+                                                            0xFFB45309,
+                                                          ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -200,31 +189,36 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               ],
                             ),
                             const Divider(height: 22),
-                            // Rumus Stok: Stok Akhir = Stok Awal + Stok Masuk - Stok Keluar
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'Awal: ${AppFormatters.number(item.initialStock)} ${item.unit}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.textSecondary,
+                                Flexible(
+                                  child: Text(
+                                    'Awal: ${AppFormatters.number(item.initialStock)} ${item.unit}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                    ),
                                   ),
                                 ),
-                                Text(
-                                  '+ Masuk: ${AppFormatters.number(item.stockIn)} ${item.unit}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.leafGreen,
-                                    fontWeight: FontWeight.w700,
+                                Flexible(
+                                  child: Text(
+                                    '+ Masuk: ${AppFormatters.number(item.stockIn)} ${item.unit}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.leafGreen,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
-                                Text(
-                                  '- Keluar: ${AppFormatters.number(item.stockOut)} ${item.unit}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.dangerRed,
-                                    fontWeight: FontWeight.w700,
+                                Flexible(
+                                  child: Text(
+                                    '- Keluar: ${AppFormatters.number(item.stockOut)} ${item.unit}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.dangerRed,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -268,27 +262,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 }),
 
               const SizedBox(height: 6),
-              // Tombol Hijau Penuh "+ Tambah Stok" (Persis Gambar Referensi Baris 3 Kolom 4)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _showAddInventoryDialog(
-                    context,
-                    defaultType: _selectedTab == 0 ? 'Benih' : 'Pupuk',
-                  ),
+                  onPressed: () => _showAddInventoryDialog(context),
                   icon: const Icon(Icons.add_rounded, size: 22),
-                  label: const Text('Tambah Stok'),
+                  label: const Text('Tambah Stok Pupuk'),
                 ),
               ),
 
               if (transactions.isNotEmpty) ...[
                 const SizedBox(height: 22),
                 const Text(
-                  'Riwayat Transaksi Stok',
+                  'Riwayat Transaksi Stok Pupuk',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 10),
-                ...transactions.take(6).map((tx) {
+                ...transactions.take(8).map((tx) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Card(
@@ -307,8 +297,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         subtitle: Text(
-                          '${AppFormatters.date(tx.date)} • Harga: ${AppFormatters.currency(tx.unitPrice)}/${tx.unit}',
+                          '${AppFormatters.date(tx.date)} • Harga: ${AppFormatters.currency(tx.unitPrice)}/${tx.unit}${tx.notes.isNotEmpty ? "\n${tx.notes}" : ""}',
                         ),
+                        isThreeLine: tx.notes.isNotEmpty,
                       ),
                     ),
                   );
@@ -323,16 +314,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  void _showAddInventoryDialog(
-    BuildContext context, {
-    required String defaultType,
-  }) {
+  void _showAddInventoryDialog(BuildContext context) {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController();
     final initStockCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     final minStockCtrl = TextEditingController(text: '25');
-    String itemType = defaultType;
     String unit = 'kg';
 
     showModalBottomSheet(
@@ -358,67 +345,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Tambah Produk Stok Baru',
+                    'Tambah Stok Pupuk Baru',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'Nama Produk *',
-                      hintText: 'Contoh: Pupuk Urea / Benih Pioneer',
+                      labelText: 'Nama Pupuk *',
+                      hintText: 'Contoh: Pupuk Urea / NPK Phonska',
                     ),
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: itemType,
-                          decoration: const InputDecoration(
-                            labelText: 'Jenis *',
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Benih',
-                              child: Text('Benih'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Pupuk',
-                              child: Text('Pupuk'),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) setState(() => itemType = v);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: unit,
-                          decoration: const InputDecoration(
-                            labelText: 'Satuan *',
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'kg', child: Text('kg')),
-                            DropdownMenuItem(
-                              value: 'gram',
-                              child: Text('gram'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'karung',
-                              child: Text('karung'),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) setState(() => unit = v);
-                          },
-                        ),
-                      ),
+                  DropdownButtonFormField<String>(
+                    initialValue: unit,
+                    decoration: const InputDecoration(labelText: 'Satuan *'),
+                    items: const [
+                      DropdownMenuItem(value: 'kg', child: Text('kg')),
+                      DropdownMenuItem(value: 'gram', child: Text('gram')),
+                      DropdownMenuItem(value: 'karung', child: Text('karung')),
+                      DropdownMenuItem(value: 'liter', child: Text('liter')),
                     ],
+                    onChanged: (v) {
+                      if (v != null) setState(() => unit = v);
+                    },
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -487,7 +439,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         if (!formKey.currentState!.validate()) return;
                         await AppDataService().addInventoryItem(
                           itemName: nameCtrl.text,
-                          itemType: itemType,
+                          itemType: 'Pupuk',
                           initialStock: AppFormatters.parsePositiveDouble(
                             initStockCtrl.text,
                             allowZero: true,
@@ -505,7 +457,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
-                      child: const Text('Simpan Stok'),
+                      child: const Text('Simpan Stok Pupuk'),
                     ),
                   ),
                 ],
@@ -607,6 +559,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
                       initialValue: selectedCycleId,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Hubungkan ke Musim Tanam',
                       ),
@@ -640,7 +593,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
-                        'Penggunaan stok ini tidak akan dihitung ulang sebagai pengeluaran baru (bebas biaya ganda).',
+                        'Penggunaan stok pupuk ini tidak dihitung ulang sebagai biaya pengeluaran baru (bebas biaya ganda).',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppTheme.primaryDarkGreen,

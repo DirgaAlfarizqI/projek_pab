@@ -15,16 +15,17 @@ import 'harvest_input_screen.dart';
 import 'inventory_screen.dart';
 import 'profit_simulation_screen.dart';
 import 'reports_screen.dart';
+import 'scheduled_reminders_screen.dart';
 import 'seed_fertilizer_screen.dart';
 
-/// HALAMAN 17: PROFIL & PENGATURAN (Sesuai Gambar Referensi Baris 3 Kolom 5)
-/// - Header Profil: Avatar Ilustrasi Petani bertopi jerami di sebelah kiri + Nama Pengguna ("Budi Santoso") & Email ("budi@email.com") di sebelah kanan
+/// HALAMAN 17: PROFIL & PENGATURAN
+/// - Header Profil: Avatar Ilustrasi Petani bertopi jerami di sebelah kiri + Nama Pengguna & Email di sebelah kanan
 /// - Kartu Daftar Menu:
-///   1. Pengaturan Akun >
-///   2. Notifikasi >
-///   3. Satuan >
+///   1. Pengaturan Akun > (Tanpa URL Backend FastAPI)
+///   2. Notifikasi > (Halaman Pengingat Jadwal Buatan Pengguna)
+///   3. Satuan > (Pengaturan Satuan Luas Lahan & Berat Hasil Panen dengan penjelasan lengkap)
 ///   4. Tentang Aplikasi >
-/// - Akses Modul Lengkap Usaha Tani (Benih & Pupuk, Stok, Pengeluaran, Panen, Simulasi, Laporan PDF)
+/// - Akses Modul Lengkap Usaha Tani (Input Benih & Pupuk, Stok Pupuk, Pengeluaran, Panen, Simulasi, Laporan PDF)
 /// - Tombol Logout Merah Salmon Penuh ("Logout")
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -36,6 +37,9 @@ class ProfileScreen extends StatelessWidget {
       builder: (context, _) {
         final service = AppDataService();
         final user = service.currentUser!;
+        final activeRemindersCount = service.scheduledReminders
+            .where((r) => r.isEnabled)
+            .length;
 
         return Scaffold(
           appBar: AppBar(title: const Text('Profil')),
@@ -94,24 +98,30 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
 
-              // 4 Menu Utama Pengaturan (Persis Gambar Referensi Baris 3 Kolom 5)
+              // 4 Menu Utama Pengaturan
               Card(
                 child: Column(
                   children: [
                     _ProfileMenuTile(
                       icon: Icons.person_outline_rounded,
                       title: 'Pengaturan Akun',
-                      subtitle: 'Nama petani, usaha tani, telepon & server ML',
+                      subtitle: 'Nama pengguna, usaha tani & nomor telepon',
                       onTap: () => _showAccountSettingsSheet(context),
                     ),
                     const Divider(height: 1),
                     _ProfileMenuTile(
                       icon: Icons.notifications_none_rounded,
                       title: 'Notifikasi',
-                      subtitle: user.notificationsEnabled
-                          ? 'Aktif (Pengingat jadwal manual & stok minimum)'
-                          : 'Nonaktif',
-                      onTap: () => _showNotificationSettingsSheet(context),
+                      subtitle:
+                          'Pengingat jadwal kegiatan ($activeRemindersCount jadwal aktif)',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ScheduledRemindersScreen(),
+                          ),
+                        );
+                      },
                     ),
                     const Divider(height: 1),
                     _ProfileMenuTile(
@@ -151,8 +161,8 @@ class ProfileScreen extends StatelessWidget {
                     const Divider(height: 1),
                     _ProfileMenuTile(
                       icon: Icons.inventory_2_outlined,
-                      title: 'Stok Benih & Pupuk',
-                      subtitle: 'Stok awal, masuk, keluar & batas minimum stok',
+                      title: 'Stok Pupuk',
+                      subtitle: 'Stok tersedia per jenis pupuk & peringatan batas minimum',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -164,7 +174,8 @@ class ProfileScreen extends StatelessWidget {
                     _ProfileMenuTile(
                       icon: Icons.receipt_long_outlined,
                       title: 'Daftar Pengeluaran',
-                      subtitle: '9 kategori biaya operasional penanaman',
+                      subtitle:
+                          '5 kategori biaya operasional & integrasi stok pupuk',
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -214,7 +225,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // Tombol Logout Merah Salmon Penuh (Persis Gambar Referensi Baris 3 Kolom 5)
+              // Tombol Logout Merah Salmon Penuh
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -257,7 +268,6 @@ class ProfileScreen extends StatelessWidget {
         imageQuality: 85,
       );
       if (picked == null) {
-        // Pengguna membatalkan pemilihan foto
         return;
       }
 
@@ -435,13 +445,14 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  /// REVISI 3: Hapus field "URL Backend Prediksi FastAPI" dari Pengaturan Akun.
+  /// Hanya menyisakan Nama Pengguna, Nama Usaha Tani Jagung, Nomor Telepon, tombol "Muat Data Contoh", dan "Simpan Akun".
   void _showAccountSettingsSheet(BuildContext context) {
     final service = AppDataService();
     final user = service.currentUser!;
     final nameCtrl = TextEditingController(text: user.name);
     final businessCtrl = TextEditingController(text: user.farmBusinessName);
     final phoneCtrl = TextEditingController(text: user.phone);
-    final apiCtrl = TextEditingController(text: user.predictionApiUrl);
 
     showModalBottomSheet(
       context: context,
@@ -481,14 +492,8 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 12),
               TextFormField(
                 controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(labelText: 'Nomor Telepon'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: apiCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'URL Backend Prediksi FastAPI',
-                ),
               ),
               const SizedBox(height: 16),
               Row(
@@ -511,7 +516,6 @@ class ProfileScreen extends StatelessWidget {
                             name: nameCtrl.text.trim(),
                             farmBusinessName: businessCtrl.text.trim(),
                             phone: phoneCtrl.text.trim(),
-                            predictionApiUrl: apiCtrl.text.trim(),
                           ),
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
@@ -528,53 +532,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showNotificationSettingsSheet(BuildContext context) {
-    final service = AppDataService();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.surfaceWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) {
-          final user = service.currentUser!;
-          return Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pengaturan Notifikasi',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Pengingat Tanggal Kegiatan & Stok Minimum',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: const Text(
-                    'Mengingatkan jadwal penanaman, pemupukan, perawatan, dan panen berdasarkan tanggal input manual pengguna.',
-                  ),
-                  value: user.notificationsEnabled,
-                  onChanged: (val) async {
-                    await service.updateUserProfile(
-                      user.copyWith(notificationsEnabled: val),
-                    );
-                    setState(() {});
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
+  /// REVISI 5: Pengaturan Satuan dengan penjelasan singkat & terhubung ke tampilan Beranda, Lahan, Analisis, dan Laporan.
   void _showUnitSettingsSheet(BuildContext context) {
     final service = AppDataService();
     showModalBottomSheet(
@@ -593,14 +551,22 @@ class ProfileScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Pengaturan Satuan & Mata Uang',
+                  'Pengaturan Satuan',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 6),
+                const Text(
+                  'Atur satuan tampilan utama untuk luas lahan (Hektare / m²) dan berat hasil panen (Ton / Kilogram / Kuintal). Pilihan Anda otomatis diterapkan pada halaman Beranda, Lahan, Analisis Keuangan, dan Laporan.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: user.preferredAreaUnit,
                   decoration: const InputDecoration(
-                    labelText: 'Satuan Luas Lahan Default',
+                    labelText: 'Satuan Luas Lahan',
                   ),
                   items: const [
                     DropdownMenuItem(
@@ -625,11 +591,15 @@ class ProfileScreen extends StatelessWidget {
                 DropdownButtonFormField<String>(
                   initialValue: user.preferredWeightUnit,
                   decoration: const InputDecoration(
-                    labelText: 'Satuan Hasil Panen Default',
+                    labelText: 'Satuan Berat Hasil Panen',
                   ),
                   items: const [
                     DropdownMenuItem(value: 'ton', child: Text('Ton')),
                     DropdownMenuItem(value: 'kg', child: Text('Kilogram (kg)')),
+                    DropdownMenuItem(
+                      value: 'kuintal',
+                      child: Text('Kuintal (kw)'),
+                    ),
                   ],
                   onChanged: (v) async {
                     if (v != null) {
@@ -640,7 +610,7 @@ class ProfileScreen extends StatelessWidget {
                     }
                   },
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -670,7 +640,7 @@ class ProfileScreen extends StatelessWidget {
         content: const Text(
           'TaniJagung v1.0.0\n\n'
           'Slogan: Kelola Usaha Tani, Raih Hasil Maksimal.\n\n'
-          'Aplikasi manajemen lahan pertanian jagung, pencatatan musim tanam, penggunaan benih & pupuk manual, stok gudang, 9 kategori pengeluaran, kalender kegiatan, analisis keuangan & produktivitas, simulasi keuntungan, prediksi Machine Learning (FastAPI), serta ekspor laporan PDF.',
+          'Aplikasi manajemen lahan pertanian jagung, pencatatan musim tanam, penggunaan benih & pupuk, stok pupuk terintegrasi dengan pengeluaran, pengingat jadwal kegiatan lokal, analisis keuangan usaha tani, simulasi keuntungan, serta ekspor laporan PDF.',
         ),
         actions: [
           TextButton(

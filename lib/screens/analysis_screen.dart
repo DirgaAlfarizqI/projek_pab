@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
+import '../core/constants/app_constants.dart';
 import '../core/theme/app_theme.dart';
 import '../core/utils/formatters.dart';
 import '../services/app_data_service.dart';
@@ -11,14 +12,8 @@ import 'reports_screen.dart';
 /// HALAMAN ANALISIS (Master Prompt Final — Simple But Modern)
 /// REVISI WAJIB DITERAPKAN:
 /// - TIDAK ADA menu, card, grafik, atau shortcut Produktivitas di halaman Analisis.
-/// - Fokus penuh pada keuangan dan hasil usaha pertanian:
-///   1. Total pendapatan
-///   2. Total pengeluaran
-///   3. Keuntungan atau kerugian (Untung / Rugi / Impas)
-///   4. Grafik pendapatan dan pengeluaran
-///   5. Perbandingan hasil panen antar musim tanam
-///   6. Biaya produksi & Harga impas
-///   7. Ringkasan keuangan per lahan
+/// - Selama belum ada data panen, tampilkan kartu netral "Menunggu data panen" dan sembunyikan persentase -100%.
+/// - Setelah ada data panen: pendapatan - pengeluaran >= 0 tampil "Untung" (hijau), < 0 tampil "Rugi" (merah).
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
 
@@ -115,8 +110,10 @@ class _FinanceAnalysisContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = AppDataService();
+    final user = service.currentUser!;
     final summary = service.calculateCycleSummary(selectedCycleId);
 
+    final hasHarvest = summary.hasHarvestData;
     final revenue = summary.totalRevenue;
     final expenses = summary.totalExpenses;
     final profit = summary.netProfitOrLoss;
@@ -203,7 +200,9 @@ class _FinanceAnalysisContent extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          AppFormatters.currency(revenue),
+                          hasHarvest
+                              ? AppFormatters.currency(revenue)
+                              : 'Belum Panen',
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w900,
@@ -251,73 +250,122 @@ class _FinanceAnalysisContent extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Banner Keuntungan / Kerugian
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: profit >= 0
-                    ? [AppTheme.darkGreen, AppTheme.primaryGreen]
-                    : [AppTheme.dangerRed, const Color(0xFFB71C1C)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          // Banner Status Keuangan (Revisi 2c: Kartu netral "Menunggu data panen" & sembunyikan -100% selama belum panen)
+          if (!hasHarvest)
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppTheme.cornYellowLight,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppTheme.cornYellow, width: 1.4),
               ),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        summary.financialStatus == 'UNTUNG'
-                            ? 'Keuntungan (Untung)'
-                            : (summary.financialStatus == 'RUGI'
-                                  ? 'Kerugian (Rugi)'
-                                  : 'Impas'),
-                        style: const TextStyle(
-                          color: Color(0xFFD9ECE0),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        AppFormatters.currency(profit),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 23,
-                          fontWeight: FontWeight.w900,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${profit >= 0 ? "+" : "-"}${AppFormatters.number(pct.abs())}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.cornYellow.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.hourglass_top_rounded,
+                      color: AppTheme.darkGreen,
                     ),
                   ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Menunggu data panen',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Total Pengeluaran: ${AppFormatters.currency(expenses)} • Untung/rugi dihitung setelah panen diisi.',
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: profit >= 0
+                      ? [AppTheme.darkGreen, AppTheme.primaryGreen]
+                      : [AppTheme.dangerRed, const Color(0xFFB71C1C)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profit >= 0
+                              ? 'Keuntungan (Untung)'
+                              : 'Kerugian (Rugi)',
+                          style: const TextStyle(
+                            color: Color(0xFFD9ECE0),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          AppFormatters.currency(profit),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${profit >= 0 ? "+" : "-"}${AppFormatters.number(pct.abs())}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 14),
 
           // Biaya Produksi & Harga Impas
@@ -394,7 +442,9 @@ class _FinanceAnalysisContent extends StatelessWidget {
                             _LegendDot(
                               color: AppTheme.primaryGreen,
                               label: 'Pendapatan',
-                              value: AppFormatters.currency(revenue),
+                              value: hasHarvest
+                                  ? AppFormatters.currency(revenue)
+                                  : 'Menunggu data panen',
                             ),
                             const SizedBox(height: 10),
                             _LegendDot(
@@ -413,16 +463,16 @@ class _FinanceAnalysisContent extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Perbandingan Hasil Panen Antar Musim Tanam (Ton)
+          // Perbandingan Hasil Panen Antar Musim Tanam
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Perbandingan Hasil Panen Antar Musim (Ton)',
-                    style: TextStyle(
+                  Text(
+                    'Perbandingan Hasil Panen Antar Musim (${user.preferredWeightUnit.toUpperCase()})',
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: AppTheme.textPrimary,
@@ -456,9 +506,12 @@ class _FinanceAnalysisContent extends StatelessWidget {
                                   return const SizedBox.shrink();
                                 }
                                 return Text(
-                                  '${AppFormatters.number(allSummaries[idx].totalHarvestTons)} T',
+                                  AppFormatters.formatWeightByPreference(
+                                    allSummaries[idx].totalHarvestTons,
+                                    user.preferredWeightUnit,
+                                  ),
                                   style: const TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 );
@@ -516,7 +569,7 @@ class _FinanceAnalysisContent extends StatelessWidget {
             ),
           ),
         ] else ...[
-          // TAB 1: DETAIL KEUANGAN & RINGKASAN KEUANGAN PER LAHAN
+          // TAB 1: DETAIL KEUANGAN, KOMPOSISI KATEGORI PENGELUARAN & RINGKASAN KEUANGAN PER LAHAN
           Card(
             child: Padding(
               padding: const EdgeInsets.all(18),
@@ -543,32 +596,77 @@ class _FinanceAnalysisContent extends StatelessWidget {
                   ),
                   _KVRow(
                     'Hasil Panen Aktual',
-                    '${AppFormatters.number(summary.totalHarvestTons)} Ton (${AppFormatters.number(summary.totalHarvestKg)} kg)',
+                    hasHarvest
+                        ? AppFormatters.formatWeightByPreference(
+                            summary.totalHarvestTons,
+                            user.preferredWeightUnit,
+                          )
+                        : 'Menunggu data panen',
                   ),
                   _KVRow(
                     'Harga Jual Rata-rata',
-                    '${AppFormatters.currency(summary.averageSellingPricePerKg)} / kg',
+                    hasHarvest
+                        ? '${AppFormatters.currency(summary.averageSellingPricePerKg)} / kg'
+                        : 'Menunggu data panen',
                   ),
                   _KVRow(
                     'Total Pendapatan',
-                    AppFormatters.currency(summary.totalRevenue),
+                    hasHarvest
+                        ? AppFormatters.currency(summary.totalRevenue)
+                        : 'Menunggu data panen',
                     bold: true,
                   ),
                   const Divider(height: 20),
                   _KVRow(
                     'Keuntungan / Kerugian',
-                    '${summary.financialStatus} (${AppFormatters.currency(summary.netProfitOrLoss)})',
+                    hasHarvest
+                        ? '${profit >= 0 ? "Untung" : "Rugi"} (${AppFormatters.currency(summary.netProfitOrLoss)})'
+                        : 'Menunggu data panen',
                     bold: true,
                   ),
                   _KVRow(
                     'Biaya Produksi per Kg',
-                    '${AppFormatters.currency(summary.productionCostPerKg)} / kg',
+                    hasHarvest
+                        ? '${AppFormatters.currency(summary.productionCostPerKg)} / kg'
+                        : 'Menunggu data panen',
                   ),
                   _KVRow(
                     'Harga Impas per Kg',
-                    '${AppFormatters.currency(summary.breakEvenPricePerKg)} / kg',
+                    hasHarvest
+                        ? '${AppFormatters.currency(summary.breakEvenPricePerKg)} / kg'
+                        : 'Menunggu data panen',
                     bold: true,
                   ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Rincian Pengeluaran per Kategori (Pupuk, Benih, Pestisida, Pengolahan lahan, Lain-lain)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Rincian Pengeluaran per Kategori',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...AppConstants.expenseCategories.map((cat) {
+                    final amount = summary.expensesByCategory[cat] ?? 0.0;
+                    return _KVRow(
+                      cat,
+                      AppFormatters.currency(amount),
+                      bold: amount > 0,
+                    );
+                  }),
                 ],
               ),
             ),
@@ -590,11 +688,15 @@ class _FinanceAnalysisContent extends StatelessWidget {
             double plotExpenses = 0;
             double plotRevenue = 0;
             double plotTons = 0;
+            bool plotHasHarvest = false;
             for (final c in plotCycles) {
               final s = service.calculateCycleSummary(c.id);
               plotExpenses += s.totalExpenses;
               plotRevenue += s.totalRevenue;
               plotTons += s.totalHarvestTons;
+              if (s.hasHarvestData) {
+                plotHasHarvest = true;
+              }
             }
             final plotProfit = plotRevenue - plotExpenses;
 
@@ -611,7 +713,7 @@ class _FinanceAnalysisContent extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              plot.name,
+                              '${plot.name} (${AppFormatters.formatAreaByPreference(plot.areaInHectares, user.preferredAreaUnit)})',
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -620,7 +722,7 @@ class _FinanceAnalysisContent extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '${plotCycles.length} Musim • ${AppFormatters.number(plotTons)} Ton',
+                            '${plotCycles.length} Musim • ${AppFormatters.formatWeightByPreference(plotTons, user.preferredWeightUnit)}',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppTheme.textSecondary,
@@ -631,15 +733,19 @@ class _FinanceAnalysisContent extends StatelessWidget {
                       const Divider(height: 16),
                       _KVRow(
                         'Total Pendapatan Lahan',
-                        AppFormatters.currency(plotRevenue),
+                        plotHasHarvest
+                            ? AppFormatters.currency(plotRevenue)
+                            : 'Menunggu data panen',
                       ),
                       _KVRow(
                         'Total Pengeluaran Lahan',
                         AppFormatters.currency(plotExpenses),
                       ),
                       _KVRow(
-                        'Laba / Rugi Lahan',
-                        AppFormatters.currency(plotProfit),
+                        'Status / Hasil Lahan',
+                        plotHasHarvest
+                            ? '${plotProfit >= 0 ? "Untung" : "Rugi"} (${AppFormatters.currency(plotProfit)})'
+                            : 'Menunggu data panen',
                         bold: true,
                       ),
                     ],

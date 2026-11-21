@@ -130,7 +130,7 @@ class PlotsScreen extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        '${AppFormatters.number(plot.areaInHectares)} Ha (${AppFormatters.number(plot.area)} ${plot.areaUnit})',
+                                        '${AppFormatters.formatAreaByPreference(plot.areaInHectares, service.currentUser!.preferredAreaUnit)} (${AppFormatters.number(plot.area)} ${plot.areaUnit})',
                                         style: const TextStyle(
                                           fontSize: 17,
                                           fontWeight: FontWeight.w900,
@@ -344,7 +344,7 @@ class PlotDetailScreen extends StatelessWidget {
                         icon: Icons.crop_free_rounded,
                         label: 'Luas Lahan',
                         value:
-                            '${AppFormatters.number(plot.areaInHectares)} Ha (${AppFormatters.number(plot.area)} ${plot.areaUnit})',
+                            '${AppFormatters.formatAreaByPreference(plot.areaInHectares, service.currentUser!.preferredAreaUnit)} (${AppFormatters.number(plot.area)} ${plot.areaUnit})',
                       ),
                       const Divider(height: 20),
                       _DetailInfoRow(

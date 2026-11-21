@@ -15,7 +15,6 @@ class AppFormatters {
   static final DateFormat _shortDateFormatter = DateFormat('dd/MM/yyyy');
 
   static String currency(num value) {
-    // Gunakan pembulatan presisi terdekat untuk mata uang Rupiah
     return _currencyFormatter.format(value.round());
   }
 
@@ -50,6 +49,33 @@ class AppFormatters {
       return area * 10000.0;
     }
     return area;
+  }
+
+  /// Format tampilan luas berdasarkan satuan preferensi pengguna ('hektare' atau 'm²')
+  static String formatAreaByPreference(
+    double areaInHectares,
+    String preferredUnit,
+  ) {
+    if (preferredUnit.toLowerCase() == 'm²' ||
+        preferredUnit.toLowerCase() == 'm2') {
+      return '${number(areaInHectares * 10000.0)} m²';
+    }
+    return '${number(areaInHectares)} Ha';
+  }
+
+  /// Format tampilan berat panen berdasarkan satuan preferensi pengguna ('ton', 'kg', atau 'kuintal')
+  static String formatWeightByPreference(
+    double weightInTons,
+    String preferredUnit,
+  ) {
+    final u = preferredUnit.toLowerCase();
+    if (u == 'kg') {
+      return '${number(weightInTons * 1000.0)} kg';
+    }
+    if (u == 'kuintal' || u == 'kw') {
+      return '${number(weightInTons * 10.0)} Kuintal';
+    }
+    return '${number(weightInTons)} Ton';
   }
 
   /// Konversi ton ke kg (1 ton = 1.000 kg)

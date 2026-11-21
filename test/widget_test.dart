@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tanijagung/core/constants/app_constants.dart';
 import 'package:tanijagung/core/utils/formatters.dart';
 import 'package:tanijagung/main.dart';
 import 'package:tanijagung/services/app_data_service.dart';
@@ -13,7 +14,7 @@ void main() {
     await initializeDateFormatting('id_ID', null);
   });
 
-  test('Perhitungan usaha tani: konversi, panen, laba/rugi, stok & anti biaya ganda berjalan akurat', () async {
+  test('Perhitungan usaha tani: migrasi kategori, status Belum Panen vs Untung/Rugi, Modal Awal & integrasi Stok Pupuk ke Pengeluaran (Rp0)', () async {
     SharedPreferences.setMockInitialValues({});
     final service = AppDataService();
     await service.initialize();
@@ -26,6 +27,10 @@ void main() {
     );
     expect(regErr, isNull);
     expect(service.currentUser?.name, 'Budi Santoso');
+
+    // Uji update Modal Awal
+    await service.updateInitialCapital(15000000);
+    expect(service.effectiveInitialCapital, 15000000);
 
     final plot = await service.addPlot(
       name: 'Lahan Sawah Timur',
@@ -73,7 +78,8 @@ void main() {
     );
     expect(fertInput.subtotal, 3000000);
 
-    await service.addExpense(
+    // Revisi 1: Kategori lama ("Tenaga kerja", "Sewa alat", "Transportasi", "Biaya panen") otomatis dimigrasikan ke "Lain-lain"
+    final legacyCatExpense = await service.addExpense(
       plotId: plot.id,
       cycleId: cycle.id,
       name: 'Upah Tanam & Panen',
@@ -83,8 +89,54 @@ void main() {
       unit: 'paket',
       unitPrice: 4000000,
     );
+    expect(legacyCatExpense.category, 'Lain-lain');
+    expect(AppConstants.normalizeExpenseCategory('Transportasi'), 'Lain-lain');
+    expect(AppConstants.normalizeExpenseCategory('Sewa alat'), 'Lain-lain');
+    expect(AppConstants.normalizeExpenseCategory('Biaya panen'), 'Lain-lain');
 
-    // 7 ton x Rp4.000 = Rp28.000.000
+    // Revisi 2c: Sebelum ada data panen, status TIDAK BOLEH "RUGI", melainkan "BELUM PANEN" / "Dalam Proses"
+    final summaryBeforeHarvest = service.calculateCycleSummary(cycle.id);
+    expect(summaryBeforeHarvest.hasHarvestData, isFalse);
+    expect(summaryBeforeHarvest.financialStatus, 'BELUM PANEN');
+    expect(service.hasAnyHarvestData, isFalse);
+    expect(service.overallFinancialStatus, 'Dalam Proses');
+
+    // Revisi 6: Stok Pupuk dihubungkan ke Pengeluaran ("Ambil dari Stok" -> Rp0 & stok berkurang otomatis)
+    final inv = await service.addInventoryItem(
+      itemName: 'Pupuk NPK Gudang',
+      itemType: 'Pupuk',
+      initialStock: 100,
+      unit: 'kg',
+      purchasePrice: 7000,
+      minimumStockAlert: 50,
+      transactionDate: start,
+    );
+    expect(service.inventory.first.remainingStock, 100);
+
+    final stockExpense = await service.addExpense(
+      plotId: plot.id,
+      cycleId: cycle.id,
+      name: 'Pemakaian Pupuk NPK Gudang',
+      category: 'Pupuk',
+      date: start.add(const Duration(days: 20)),
+      quantity: 40,
+      unit: 'kg',
+      unitPrice: 0,
+      isFromFertilizerStock: true,
+      linkedInventoryId: inv.id,
+      stockTakenQuantity: 40,
+    );
+    expect(stockExpense.totalCost, 0);
+    expect(service.inventory.first.remainingStock, 60);
+
+    // Total pengeluaran tetap Rp10.000.000 (tidak dihitung ganda karena Ambil dari Stok bernilai Rp0)
+    expect(service.calculateCycleSummary(cycle.id).totalExpenses, 10000000);
+
+    // Jika pengeluaran dari stok dihapus, stok pupuk kembali seperti semula (60 + 40 = 100 kg)
+    await service.deleteExpense(stockExpense.id);
+    expect(service.inventory.first.remainingStock, 100);
+
+    // Tambahkan hasil panen: 7 ton x Rp4.000 = Rp28.000.000
     final harvest = await service.addHarvestRecord(
       plotId: plot.id,
       cycleId: cycle.id,
@@ -96,42 +148,19 @@ void main() {
     expect(harvest.grossRevenue, 28000000);
 
     final summary = service.calculateCycleSummary(cycle.id);
+    expect(summary.hasHarvestData, isTrue);
     expect(summary.totalExpenses, 10000000);
     expect(summary.totalRevenue, 28000000);
     expect(summary.netProfitOrLoss, 18000000);
     expect(summary.financialStatus, 'UNTUNG');
+    expect(service.overallFinancialStatus, 'Untung');
 
-    final inv = await service.addInventoryItem(
-      itemName: 'Pupuk NPK Gudang',
-      itemType: 'Pupuk',
-      initialStock: 100,
-      unit: 'kg',
-      purchasePrice: 7000,
-      minimumStockAlert: 50,
-      transactionDate: start,
+    // Uji format satuan luas & berat hasil panen (Revisi 5)
+    expect(AppFormatters.formatAreaByPreference(2.0, 'm²'), contains('20.000'));
+    expect(
+      AppFormatters.formatWeightByPreference(7.0, 'kuintal'),
+      contains('70'),
     );
-    await service.recordInventoryTransaction(
-      inventoryId: inv.id,
-      transactionType: 'Masuk',
-      quantity: 50,
-      unitPrice: 7000,
-      date: start,
-    );
-    await service.recordInventoryTransaction(
-      inventoryId: inv.id,
-      transactionType: 'Keluar',
-      quantity: 120,
-      unitPrice: 7000,
-      date: start,
-      cycleId: cycle.id,
-    );
-    final updatedInv = service.inventory.first;
-    expect(updatedInv.remainingStock, 30);
-
-    // Anti double-counting
-    final summaryAfterStockUse = service.calculateCycleSummary(cycle.id);
-    expect(summaryAfterStockUse.totalExpenses, 10000000);
-    expect(AppFormatters.tonsToKg(7), 7000);
   });
 
   testWidgets(
@@ -147,6 +176,9 @@ void main() {
         const Size(412, 915), // Layar Android Besar
       ];
 
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       for (final size in screenSizes) {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1.0;
@@ -154,7 +186,12 @@ void main() {
         await tester.pumpWidget(const MaterialApp(home: MainNavigationShell()));
         await tester.pumpAndSettle();
 
-        // Verifikasi Beranda tidak menampilkan Stok Gudang atau Prediksi ML
+        // Pastikan berada di Tab 1: Beranda
+        await tester.tap(find.text('Beranda').last);
+        await tester.pumpAndSettle();
+
+        // Verifikasi Beranda menampilkan Modal Awal dan tidak menampilkan Stok Gudang atau Prediksi ML
+        expect(find.textContaining('Modal Awal:'), findsOneWidget);
         expect(find.text('Stok Gudang'), findsNothing);
         expect(find.text('Prediksi ML'), findsNothing);
 
@@ -171,9 +208,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Produktivitas'), findsNothing);
 
-        // Pindah ke Tab 5: Profil
+        // Pindah ke Tab 5: Profil (Verifikasi tidak ada Stok Benih & Pupuk)
         await tester.tap(find.text('Profil').last);
         await tester.pumpAndSettle();
+        expect(find.text('Stok Benih & Pupuk'), findsNothing);
 
         // Verifikasi tidak ada tulisan DATA CONTOH di UI
         expect(find.textContaining('DATA CONTOH'), findsNothing);

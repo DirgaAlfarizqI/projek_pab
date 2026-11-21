@@ -8,7 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import '../core/constants/app_constants.dart';
 import '../models/app_models.dart';
+import 'local_notification_service.dart';
 
 class CycleFinancialSummary {
   final PlantingCycleModel cycle;
@@ -21,7 +23,8 @@ class CycleFinancialSummary {
   final double averageSellingPricePerKg;
   final double totalRevenue;
   final double netProfitOrLoss;
-  final String financialStatus; // 'UNTUNG', 'RUGI', 'IMPAS'
+  final String financialStatus; // 'BELUM PANEN', 'UNTUNG', 'RUGI', 'IMPAS'
+  final bool hasHarvestData;
   final double profitPercentage;
   final double productionCostPerKg;
   final double breakEvenPricePerKg;
@@ -43,6 +46,7 @@ class CycleFinancialSummary {
     required this.totalRevenue,
     required this.netProfitOrLoss,
     required this.financialStatus,
+    this.hasHarvestData = false,
     required this.profitPercentage,
     required this.productionCostPerKg,
     required this.breakEvenPricePerKg,
@@ -79,6 +83,7 @@ class AppDataService extends ChangeNotifier {
   List<HarvestRecordModel> _harvests = [];
   List<PredictionModel> _predictions = [];
   List<AppNotificationModel> _notifications = [];
+  List<ScheduledReminderModel> _reminders = [];
 
   bool get isInitialized => _isInitialized;
   bool get hasSeenOnboarding => _hasSeenOnboarding;
@@ -118,11 +123,24 @@ class AppDataService extends ChangeNotifier {
             : _expenses.where((e) => e.userId == _currentUser!.id).toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
+  /// Hanya menyimpan dan menampilkan Stok Pupuk (Revisi 6a: Stok Benih dihapus)
   List<InventoryItemModel> get inventory =>
       _currentUser == null
             ? []
-            : _inventory.where((e) => e.userId == _currentUser!.id).toList()
+            : _inventory
+                  .where(
+                    (e) =>
+                        e.userId == _currentUser!.id &&
+                        e.itemType.toLowerCase() != 'benih',
+                  )
+                  .toList()
         ..sort((a, b) => a.itemName.compareTo(b.itemName));
+
+  List<ScheduledReminderModel> get scheduledReminders =>
+      _currentUser == null
+            ? []
+            : _reminders.where((e) => e.userId == _currentUser!.id).toList()
+        ..sort((a, b) => a.nextOccurrence.compareTo(b.nextOccurrence));
 
   List<InventoryTransactionModel> get inventoryTransactions =>
       _currentUser == null
@@ -234,6 +252,38 @@ class AppDataService extends ChangeNotifier {
       }
     }
 
+    // 3. Cek pengingat jadwal buatan pengguna (Penyiraman, Pemupukan, dll.)
+    for (final rem in scheduledReminders) {
+      if (!rem.isEnabled) continue;
+      final nextOcc = rem.nextOccurrence;
+      final diffDays = DateTime(
+        nextOcc.year,
+        nextOcc.month,
+        nextOcc.day,
+      ).difference(today).inDays;
+      if (diffDays >= 0 && diffDays <= 7) {
+        final plotName = rem.plotId != null
+            ? (getPlotById(rem.plotId!)?.name ?? 'Lahan')
+            : 'Semua Lahan';
+        final timeStr =
+            '${nextOcc.hour.toString().padLeft(2, '0')}:${nextOcc.minute.toString().padLeft(2, '0')}';
+        result.add(
+          AppNotificationModel(
+            id: 'notif_rem_${rem.id}',
+            userId: uid,
+            title: 'Pengingat ${rem.activityType} ($timeStr)',
+            message:
+                '$plotName • ${_formatDayMonth(nextOcc)} (${rem.repeatType})${rem.notes.isNotEmpty ? " • ${rem.notes}" : ""}',
+            type: 'jadwal_akan_datang',
+            relatedId: rem.id,
+            date: nextOcc,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+      }
+    }
+
     return result;
   }
 
@@ -262,6 +312,14 @@ class AppDataService extends ChangeNotifier {
       if (usersMap.containsKey(savedUserId)) {
         _currentUser = UserModel.fromMap(usersMap[savedUserId]!);
       }
+    }
+
+    await LocalNotificationService().initialize();
+    if (_currentUser != null) {
+      await LocalNotificationService().syncAllUserReminders(
+        scheduledReminders,
+        (pid) => pid != null ? getPlotById(pid)?.name : null,
+      );
     }
 
     _isInitialized = true;
@@ -855,23 +913,76 @@ class AppDataService extends ChangeNotifier {
     required double unitPrice,
     String notes = '',
     String? receiptPhotoPath,
+    bool isFromFertilizerStock = false,
+    String? linkedInventoryId,
+    double stockTakenQuantity = 0.0,
     bool isDemo = false,
   }) async {
     final uid = _currentUser!.id;
     final now = DateTime.now();
+    final normalizedCat = AppConstants.normalizeExpenseCategory(category);
+
+    // Jika diambil dari stok pupuk, kurangi stok secara otomatis dan catat biaya pengeluaran Rp0 (agar tidak dobel dengan pembelian stok)
+    double effectiveUnitPrice = unitPrice;
+    String effectiveNotes = notes.trim();
+    if (isFromFertilizerStock &&
+        linkedInventoryId != null &&
+        stockTakenQuantity > 0) {
+      final invIdx = _inventory.indexWhere(
+        (i) => i.id == linkedInventoryId && i.userId == uid,
+      );
+      if (invIdx != -1) {
+        final inv = _inventory[invIdx];
+        _inventory[invIdx] = inv.copyWith(
+          stockOut: inv.stockOut + stockTakenQuantity,
+          lastTransactionDate: date,
+          updatedAt: now,
+        );
+        final equivValue = (stockTakenQuantity * inv.lastPurchasePrice).round();
+        final stockInfo =
+            'Diambil dari stok ${inv.itemName} (${stockTakenQuantity.toStringAsFixed(1)} ${inv.unit} • Nilai stok Rp$equivValue, dicatat Rp0 agar tidak dobel biaya)';
+        effectiveNotes = effectiveNotes.isEmpty
+            ? stockInfo
+            : '$stockInfo • $effectiveNotes';
+
+        _inventoryTransactions.add(
+          InventoryTransactionModel(
+            id: 'invtx_${_uuid.v4()}',
+            userId: uid,
+            inventoryId: inv.id,
+            itemName: inv.itemName,
+            transactionType: 'Keluar',
+            quantity: stockTakenQuantity,
+            unit: inv.unit,
+            unitPrice: inv.lastPurchasePrice,
+            date: date,
+            cycleId: cycleId,
+            notes: 'Diambil melalui form pengeluaran: ${name.trim()}',
+            isDemo: isDemo,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+      }
+      effectiveUnitPrice = 0.0;
+    }
+
     final exp = ExpenseModel(
       id: 'exp_${_uuid.v4()}',
       userId: uid,
       plotId: plotId,
       cycleId: cycleId,
       name: name.trim(),
-      category: category,
+      category: normalizedCat,
       date: date,
       quantity: quantity,
       unit: unit,
-      unitPrice: unitPrice,
-      notes: notes.trim(),
+      unitPrice: effectiveUnitPrice,
+      notes: effectiveNotes,
       receiptPhotoPath: receiptPhotoPath,
+      isFromFertilizerStock: isFromFertilizerStock,
+      linkedInventoryId: linkedInventoryId,
+      stockTakenQuantity: stockTakenQuantity,
       isDemo: isDemo,
       createdAt: now,
       updatedAt: now,
@@ -884,10 +995,51 @@ class AppDataService extends ChangeNotifier {
   }
 
   Future<void> updateExpense(ExpenseModel updated) async {
+    final uid = _currentUser?.id;
+    if (uid == null) return;
     final idx = _expenses.indexWhere(
-      (e) => e.id == updated.id && e.userId == _currentUser?.id,
+      (e) => e.id == updated.id && e.userId == uid,
     );
     if (idx == -1) return;
+    final oldExp = _expenses[idx];
+    final now = DateTime.now();
+
+    // 1. Kembalikan stok lama jika sebelumnya mengambil dari stok pupuk
+    if (oldExp.isFromFertilizerStock &&
+        oldExp.linkedInventoryId != null &&
+        oldExp.stockTakenQuantity > 0) {
+      final oldInvIdx = _inventory.indexWhere(
+        (i) => i.id == oldExp.linkedInventoryId && i.userId == uid,
+      );
+      if (oldInvIdx != -1) {
+        final inv = _inventory[oldInvIdx];
+        final restoredOut = (inv.stockOut - oldExp.stockTakenQuantity) < 0
+            ? 0.0
+            : (inv.stockOut - oldExp.stockTakenQuantity);
+        _inventory[oldInvIdx] = inv.copyWith(
+          stockOut: restoredOut,
+          updatedAt: now,
+        );
+      }
+    }
+
+    // 2. Kurangi stok baru jika hasil edit mengambil dari stok pupuk
+    if (updated.isFromFertilizerStock &&
+        updated.linkedInventoryId != null &&
+        updated.stockTakenQuantity > 0) {
+      final newInvIdx = _inventory.indexWhere(
+        (i) => i.id == updated.linkedInventoryId && i.userId == uid,
+      );
+      if (newInvIdx != -1) {
+        final inv = _inventory[newInvIdx];
+        _inventory[newInvIdx] = inv.copyWith(
+          stockOut: inv.stockOut + updated.stockTakenQuantity,
+          lastTransactionDate: updated.date,
+          updatedAt: now,
+        );
+      }
+    }
+
     _expenses[idx] = updated;
     await _persistAllToDisk();
     _syncToFirestoreIfAvailable('expenses', updated.id, updated.toMap());
@@ -897,7 +1049,32 @@ class AppDataService extends ChangeNotifier {
   Future<void> deleteExpense(String expenseId) async {
     final uid = _currentUser?.id;
     if (uid == null) return;
-    _expenses.removeWhere((e) => e.id == expenseId && e.userId == uid);
+    final idx = _expenses.indexWhere(
+      (e) => e.id == expenseId && e.userId == uid,
+    );
+    if (idx == -1) return;
+    final target = _expenses[idx];
+
+    // Kembalikan stok pupuk jika pengeluaran yang dihapus berasal dari stok pupuk
+    if (target.isFromFertilizerStock &&
+        target.linkedInventoryId != null &&
+        target.stockTakenQuantity > 0) {
+      final invIdx = _inventory.indexWhere(
+        (i) => i.id == target.linkedInventoryId && i.userId == uid,
+      );
+      if (invIdx != -1) {
+        final inv = _inventory[invIdx];
+        final restoredOut = (inv.stockOut - target.stockTakenQuantity) < 0
+            ? 0.0
+            : (inv.stockOut - target.stockTakenQuantity);
+        _inventory[invIdx] = inv.copyWith(
+          stockOut: restoredOut,
+          updatedAt: DateTime.now(),
+        );
+      }
+    }
+
+    _expenses.removeAt(idx);
     await _persistAllToDisk();
     notifyListeners();
   }
@@ -1308,6 +1485,90 @@ class AppDataService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== PENGINGAT JADWAL BUATAN PENGGUNA ====================
+
+  Future<ScheduledReminderModel> addScheduledReminder({
+    required String activityType,
+    String? plotId,
+    required DateTime scheduledDateTime,
+    required String repeatType,
+    int intervalDays = 1,
+    String notes = '',
+    bool isEnabled = true,
+  }) async {
+    final uid = _currentUser!.id;
+    final now = DateTime.now();
+    final rem = ScheduledReminderModel(
+      id: 'rem_${_uuid.v4()}',
+      userId: uid,
+      activityType: activityType,
+      plotId: plotId,
+      scheduledDateTime: scheduledDateTime,
+      repeatType: repeatType,
+      intervalDays: intervalDays < 1 ? 1 : intervalDays,
+      notes: notes.trim(),
+      isEnabled: isEnabled,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _reminders.add(rem);
+    await _persistAllToDisk();
+    await LocalNotificationService().scheduleReminder(
+      rem,
+      plotName: plotId != null ? getPlotById(plotId)?.name : null,
+    );
+    notifyListeners();
+    return rem;
+  }
+
+  Future<void> updateScheduledReminder(ScheduledReminderModel updated) async {
+    final uid = _currentUser?.id;
+    if (uid == null) return;
+    final idx = _reminders.indexWhere(
+      (r) => r.id == updated.id && r.userId == uid,
+    );
+    if (idx == -1) return;
+    _reminders[idx] = updated.copyWith(updatedAt: DateTime.now());
+    await _persistAllToDisk();
+    await LocalNotificationService().scheduleReminder(
+      _reminders[idx],
+      plotName: updated.plotId != null
+          ? getPlotById(updated.plotId!)?.name
+          : null,
+    );
+    notifyListeners();
+  }
+
+  Future<void> toggleScheduledReminder(String reminderId, bool enabled) async {
+    final uid = _currentUser?.id;
+    if (uid == null) return;
+    final idx = _reminders.indexWhere(
+      (r) => r.id == reminderId && r.userId == uid,
+    );
+    if (idx == -1) return;
+    _reminders[idx] = _reminders[idx].copyWith(
+      isEnabled: enabled,
+      updatedAt: DateTime.now(),
+    );
+    await _persistAllToDisk();
+    await LocalNotificationService().scheduleReminder(
+      _reminders[idx],
+      plotName: _reminders[idx].plotId != null
+          ? getPlotById(_reminders[idx].plotId!)?.name
+          : null,
+    );
+    notifyListeners();
+  }
+
+  Future<void> deleteScheduledReminder(String reminderId) async {
+    final uid = _currentUser?.id;
+    if (uid == null) return;
+    _reminders.removeWhere((r) => r.id == reminderId && r.userId == uid);
+    await _persistAllToDisk();
+    await LocalNotificationService().cancelReminderNotifications(reminderId);
+    notifyListeners();
+  }
+
   // ==================== RIWAYAT PREDIKSI ML ====================
 
   Future<PredictionModel> savePrediction(PredictionModel prediction) async {
@@ -1332,27 +1593,19 @@ class AppDataService extends ChangeNotifier {
     final cycleInputs = getCropInputsForCycle(cycleId);
     final cycleHarvests = getHarvestsForCycle(cycleId);
 
-    // 1. Pengeluaran operasional dari tabel expenses
+    // 1. Pengeluaran operasional dari tabel expenses (5 Kategori Revisi 1)
     double operationalExpenses = 0.0;
     final Map<String, double> byCategory = {
-      'Benih': 0.0,
       'Pupuk': 0.0,
+      'Benih': 0.0,
       'Pestisida': 0.0,
       'Pengolahan lahan': 0.0,
-      'Tenaga kerja': 0.0,
-      'Sewa alat': 0.0,
-      'Transportasi': 0.0,
-      'Biaya panen': 0.0,
       'Lain-lain': 0.0,
     };
 
     for (final exp in cycleExpenses) {
       operationalExpenses += exp.totalCost;
-      final normalizedCat = byCategory.containsKey(exp.category)
-          ? exp.category
-          : (exp.category == 'Sewa alat atau mesin'
-                ? 'Sewa alat'
-                : 'Lain-lain');
+      final normalizedCat = AppConstants.normalizeExpenseCategory(exp.category);
       byCategory[normalizedCat] =
           (byCategory[normalizedCat] ?? 0.0) + exp.totalCost;
     }
@@ -1381,22 +1634,29 @@ class AppDataService extends ChangeNotifier {
       totalRevenue += h.grossRevenue;
     }
 
-    final double avgSellingPrice = totalHarvestKg > 0
+    final bool hasHarvestData = cycleHarvests.isNotEmpty && totalHarvestKg > 0;
+    final double avgSellingPrice = hasHarvestData
         ? (totalRevenue / totalHarvestKg)
         : 0.0;
 
-    // 3. Laba / Rugi = Total Pendapatan - Total Pengeluaran
-    final double netProfitOrLoss = totalRevenue - totalExpenses;
-    String status = 'IMPAS';
-    if (netProfitOrLoss > 0.001) {
-      status = 'UNTUNG';
-    } else if (netProfitOrLoss < -0.001) {
-      status = 'RUGI';
+    // 3. Logika Status Keuangan (Revisi 2c):
+    // Status "Rugi" TIDAK boleh muncul hanya karena ada pengeluaran sebelum ada data hasil panen.
+    // Setelah data panen ada: pendapatan - pengeluaran >= 0 tampil "UNTUNG", < 0 tampil "RUGI".
+    final double netProfitOrLoss = hasHarvestData
+        ? (totalRevenue - totalExpenses)
+        : 0.0;
+    String status = 'BELUM PANEN';
+    if (hasHarvestData) {
+      if (totalRevenue - totalExpenses >= 0) {
+        status = 'UNTUNG';
+      } else {
+        status = 'RUGI';
+      }
     }
 
-    // 4. Persentase keuntungan terhadap total biaya
-    final double profitPercentage = totalExpenses > 0
-        ? (netProfitOrLoss / totalExpenses) * 100.0
+    // 4. Persentase keuntungan terhadap total biaya (Hanya dihitung jika sudah ada data panen)
+    final double profitPercentage = (hasHarvestData && totalExpenses > 0)
+        ? ((totalRevenue - totalExpenses) / totalExpenses) * 100.0
         : 0.0;
 
     // 5. Biaya produksi per kg & Harga impas (Break-even price) per kg
@@ -1437,6 +1697,7 @@ class AppDataService extends ChangeNotifier {
       totalRevenue: totalRevenue,
       netProfitOrLoss: netProfitOrLoss,
       financialStatus: status,
+      hasHarvestData: hasHarvestData,
       profitPercentage: profitPercentage,
       productionCostPerKg: productionCostPerKg,
       breakEvenPricePerKg: breakEvenPricePerKg,
@@ -1482,8 +1743,45 @@ class AppDataService extends ChangeNotifier {
     return sum;
   }
 
+  bool get hasAnyHarvestData =>
+      harvests.isNotEmpty && harvests.any((h) => h.yieldKg > 0);
+
   double get totalOverallProfitOrLoss =>
-      totalRecordedRevenue - totalAllCyclesExpenses;
+      hasAnyHarvestData ? (totalRecordedRevenue - totalAllCyclesExpenses) : 0.0;
+
+  String get overallFinancialStatus {
+    if (!hasAnyHarvestData) return 'Dalam Proses';
+    return (totalRecordedRevenue - totalAllCyclesExpenses) >= 0
+        ? 'Untung'
+        : 'Rugi';
+  }
+
+  /// Modal awal usaha tani: mengambil nilai dari profil pengguna atau jumlah modal awal musim tanam
+  double get effectiveInitialCapital {
+    if (_currentUser == null) return 0.0;
+    if (_currentUser!.initialCapital > 0) return _currentUser!.initialCapital;
+    double sum = 0.0;
+    for (final c in cycles) {
+      sum += c.initialCapital;
+    }
+    return sum;
+  }
+
+  Future<void> updateInitialCapital(double newCapital) async {
+    if (_currentUser == null) return;
+    await updateUserProfile(_currentUser!.copyWith(initialCapital: newCapital));
+    if (activeCycles.isNotEmpty) {
+      final firstActive = activeCycles.first;
+      await updatePlantingCycle(
+        firstActive.copyWith(initialCapital: newCapital),
+      );
+    } else if (cycles.isNotEmpty) {
+      final firstCycle = cycles.first;
+      await updatePlantingCycle(
+        firstCycle.copyWith(initialCapital: newCapital),
+      );
+    }
+  }
 
   double get totalTargetYieldActiveCyclesTons {
     double sum = 0.0;
@@ -1619,6 +1917,22 @@ class AppDataService extends ChangeNotifier {
         changed = true;
       }
     }
+    // Migrasikan kategori pengeluaran lama ke "Lain-lain" & hapus stok benih lama
+    for (int i = 0; i < _expenses.length; i++) {
+      final normCat = AppConstants.normalizeExpenseCategory(
+        _expenses[i].category,
+      );
+      if (_expenses[i].category != normCat) {
+        _expenses[i] = _expenses[i].copyWith(category: normCat);
+        changed = true;
+      }
+    }
+    final beforeInvLen = _inventory.length;
+    _inventory.removeWhere((item) => item.itemType.toLowerCase() == 'benih');
+    if (_inventory.length != beforeInvLen) {
+      changed = true;
+    }
+
     if (changed) {
       await _persistAllToDisk();
     }
@@ -1898,9 +2212,9 @@ class AppDataService extends ChangeNotifier {
       isDemo: true,
     );
 
-    // Contoh Stok Gudang
+    // Contoh Stok Pupuk
     await addInventoryItem(
-      itemName: 'Pupuk NPK Phonska Gudang',
+      itemName: 'Pupuk NPK Phonska',
       itemType: 'Pupuk',
       initialStock: 150,
       unit: 'kg',
@@ -1911,12 +2225,12 @@ class AppDataService extends ChangeNotifier {
     );
 
     await addInventoryItem(
-      itemName: 'Benih Jagung NK 212 Cadangan',
-      itemType: 'Benih',
-      initialStock: 15,
+      itemName: 'Pupuk Urea',
+      itemType: 'Pupuk',
+      initialStock: 80,
       unit: 'kg',
-      purchasePrice: 105000,
-      minimumStockAlert: 5,
+      purchasePrice: 6500,
+      minimumStockAlert: 30,
       transactionDate: now.subtract(const Duration(days: 10)),
       isDemo: true,
     );
@@ -1944,6 +2258,10 @@ class AppDataService extends ChangeNotifier {
     _notifications = _decodeList(
       'table_notifications',
       AppNotificationModel.fromMap,
+    );
+    _reminders = _decodeList(
+      'table_scheduled_reminders',
+      ScheduledReminderModel.fromMap,
     );
   }
 
@@ -2004,6 +2322,10 @@ class AppDataService extends ChangeNotifier {
     await _prefs?.setString(
       'table_notifications',
       jsonEncode(_notifications.map((e) => e.toMap()).toList()),
+    );
+    await _prefs?.setString(
+      'table_scheduled_reminders',
+      jsonEncode(_reminders.map((e) => e.toMap()).toList()),
     );
   }
 

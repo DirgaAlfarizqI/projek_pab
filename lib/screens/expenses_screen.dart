@@ -220,13 +220,20 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            AppFormatters.currency(
-                                              exp.totalCost,
-                                            ),
-                                            style: const TextStyle(
-                                              fontSize: 16,
+                                            exp.isFromFertilizerStock
+                                                ? 'Rp0 (Diambil dari Stok Pupuk: ${AppFormatters.number(exp.stockTakenQuantity)} ${exp.unit})'
+                                                : AppFormatters.currency(
+                                                    exp.totalCost,
+                                                  ),
+                                            style: TextStyle(
+                                              fontSize:
+                                                  exp.isFromFertilizerStock
+                                                  ? 13.5
+                                                  : 16,
                                               fontWeight: FontWeight.w900,
-                                              color: AppTheme.textPrimary,
+                                              color: exp.isFromFertilizerStock
+                                                  ? AppTheme.darkGreen
+                                                  : AppTheme.textPrimary,
                                             ),
                                           ),
                                           const SizedBox(height: 2),
@@ -240,14 +247,33 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                         ],
                                       ),
                                     ),
-                                    IconButton(
-                                      tooltip: 'Hapus Pengeluaran',
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        color: AppTheme.dangerRed,
-                                      ),
-                                      onPressed: () =>
-                                          service.deleteExpense(exp.id),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          tooltip: 'Edit Pengeluaran',
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            color: AppTheme.textSecondary,
+                                            size: 20,
+                                          ),
+                                          onPressed: () =>
+                                              AppFormDialogs.showExpenseForm(
+                                                context,
+                                                existingExpense: exp,
+                                              ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Hapus Pengeluaran',
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: AppTheme.dangerRed,
+                                            size: 20,
+                                          ),
+                                          onPressed: () =>
+                                              service.deleteExpense(exp.id),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),

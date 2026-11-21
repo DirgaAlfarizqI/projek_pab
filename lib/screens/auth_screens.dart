@@ -200,43 +200,49 @@ class _SplashScreenState extends State<SplashScreen>
                   const SizedBox(height: 28),
 
                   // Judul "TaniJagung" dengan animasi Fade-Up ("Tani" lalu "Jagung" menyusul)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Opacity(
-                        opacity: _taniTextProgress.value.clamp(0.0, 1.0),
-                        child: Transform.translate(
-                          offset: Offset(0, (1 - _taniTextProgress.value) * 20),
-                          child: const Text(
-                            'Tani',
-                            style: TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.primaryDarkGreen,
-                              letterSpacing: -0.5,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Opacity(
+                          opacity: _taniTextProgress.value.clamp(0.0, 1.0),
+                          child: Transform.translate(
+                            offset: Offset(
+                              0,
+                              (1 - _taniTextProgress.value) * 20,
+                            ),
+                            child: const Text(
+                              'Tani',
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.primaryDarkGreen,
+                                letterSpacing: -0.5,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      Opacity(
-                        opacity: _jagungTextProgress.value.clamp(0.0, 1.0),
-                        child: Transform.translate(
-                          offset: Offset(
-                            0,
-                            (1 - _jagungTextProgress.value) * 20,
-                          ),
-                          child: const Text(
-                            'Jagung',
-                            style: TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.primaryGreen,
-                              letterSpacing: -0.5,
+                        Opacity(
+                          opacity: _jagungTextProgress.value.clamp(0.0, 1.0),
+                          child: Transform.translate(
+                            offset: Offset(
+                              0,
+                              (1 - _jagungTextProgress.value) * 20,
+                            ),
+                            child: const Text(
+                              'Jagung',
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w900,
+                                color: AppTheme.primaryGreen,
+                                letterSpacing: -0.5,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const Spacer(flex: 1),
 
