@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -11,13 +12,7 @@ import '../models/app_models.dart';
 import '../services/app_data_service.dart';
 import '../widgets/tanijagung_widgets.dart';
 import '../widgets/ui_kit.dart';
-import 'expenses_screen.dart';
-import 'harvest_input_screen.dart';
-import 'inventory_screen.dart';
-import 'profit_simulation_screen.dart';
-import 'reports_screen.dart';
 import 'scheduled_reminders_screen.dart';
-import 'seed_fertilizer_screen.dart';
 
 /// HALAMAN 17: PROFIL & PENGATURAN
 /// - Header Profil: Avatar Ilustrasi Petani bertopi jerami di sebelah kiri + Nama Pengguna & Email di sebelah kanan
@@ -49,11 +44,12 @@ class ProfileScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                // Header Avatar Petani (Bisa Diketuk untuk Ganti Foto Profil) + Nama & Email
+                // Header Foto Profil Pengguna (Bisa Diketuk untuk Ganti Foto Profil Sendiri) + Nama & Email
                 StaggeredEntrance(
                   index: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: SoftCard(
+                    radius: AppRadius.xl,
+                    padding: const EdgeInsets.all(18),
                     child: Row(
                       children: [
                         GestureDetector(
@@ -61,6 +57,7 @@ class ProfileScreen extends StatelessWidget {
                           child: FarmerAvatarIllustration(
                             size: 84,
                             customImagePath: user.profilePhotoPath,
+                            userName: user.name,
                             showEditBadge: true,
                           ),
                         ),
@@ -73,21 +70,21 @@ class ProfileScreen extends StatelessWidget {
                                 user.name,
                                 style: const TextStyle(
                                   fontFamily: AppTheme.headingFont,
-                                  fontSize: 22,
+                                  fontSize: 20,
                                   fontWeight: FontWeight.w800,
                                   color: AppTheme.textPrimary,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 user.email,
                                 style: const TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13.5,
                                   color: AppTheme.textSecondary,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 user.farmBusinessName,
                                 style: const TextStyle(
@@ -95,6 +92,51 @@ class ProfileScreen extends StatelessWidget {
                                   fontSize: 12.5,
                                   color: AppTheme.primaryDarkGreen,
                                   fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () =>
+                                    _showProfilePhotoOptions(context, user),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.softMintGreen,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.add_a_photo_outlined,
+                                        size: 14,
+                                        color: AppTheme.primaryDarkGreen,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          (user.profilePhotoPath != null &&
+                                                  user.profilePhotoPath!
+                                                      .trim()
+                                                      .isNotEmpty)
+                                              ? 'Ubah Foto Profil'
+                                              : 'Pasang Foto Profil',
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                          style: const TextStyle(
+                                            fontFamily: AppTheme.headingFont,
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.primaryDarkGreen,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -155,99 +197,11 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Pintasan Seluruh Halaman Fungsional TaniJagung
-                StaggeredEntrance(
-                  index: 2,
-                  child: SoftCard(
-                    radius: AppRadius.xl,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Column(
-                      children: [
-                        _ProfileMenuTile(
-                          icon: Icons.grain_rounded,
-                          title: 'Input Benih & Pupuk',
-                          subtitle:
-                              'Pencatatan pembelian & pemakaian benih/pupuk',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SeedFertilizerScreen(),
-                            ),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        _ProfileMenuTile(
-                          icon: Icons.inventory_2_outlined,
-                          title: 'Stok Pupuk',
-                          subtitle: 'Stok tersedia per jenis pupuk & peringatan batas minimum',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const InventoryScreen(),
-                            ),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        _ProfileMenuTile(
-                          icon: Icons.receipt_long_outlined,
-                          title: 'Daftar Pengeluaran',
-                          subtitle: '5 kategori biaya operasional & integrasi stok pupuk',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ExpensesScreen(),
-                            ),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        _ProfileMenuTile(
-                          icon: Icons.scale_outlined,
-                          title: 'Input Hasil Panen',
-                          subtitle: 'Konversi otomatis ton ke kg & pendapatan',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const HarvestInputScreen(),
-                            ),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        _ProfileMenuTile(
-                          icon: Icons.calculate_outlined,
-                          title: 'Simulasi Keuntungan',
-                          subtitle:
-                              'Simulasi pendapatan, laba/rugi & harga impas',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ProfitSimulationScreen(),
-                            ),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        _ProfileMenuTile(
-                          icon: Icons.picture_as_pdf_outlined,
-                          title: 'Riwayat & Laporan PDF',
-                          subtitle:
-                              'Filter tahun, lahan, perbandingan & Export PDF',
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ReportsScreen(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 20),
 
                 // Tombol Logout Merah Salmon Penuh
                 StaggeredEntrance(
-                  index: 3,
+                  index: 2,
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -300,7 +254,10 @@ class ProfileScreen extends StatelessWidget {
       }
 
       String savedPath = picked.path;
-      if (!kIsWeb) {
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        savedPath = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      } else {
         try {
           final appDir = await getApplicationDocumentsDirectory();
           final profileDir = Directory('${appDir.path}/tanijagung_profiles');
@@ -444,7 +401,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   title: const Text(
-                    'Hapus Foto / Kembali ke Default',
+                    'Hapus Foto Profil',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: AppTheme.dangerRed,
@@ -459,7 +416,7 @@ class ProfileScreen extends StatelessWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Foto profil dikembalikan ke avatar default.',
+                            'Foto profil berhasil dihapus.',
                           ),
                         ),
                       );

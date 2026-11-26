@@ -308,11 +308,12 @@ class _CornFieldScenicPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// 3. Ilustrasi Petani Modern (Untuk Onboarding & Avatar Profil sesuai Gambar Referensi)
+/// 3. Foto Profil Pengguna Modern (Mendukung Foto Galeri/Kamera, Data URI Web, atau Inisial Nama Pengguna)
 class FarmerAvatarIllustration extends StatelessWidget {
   final double size;
   final bool withTablet;
   final String? customImagePath;
+  final String? userName;
   final bool showEditBadge;
 
   const FarmerAvatarIllustration({
@@ -320,11 +321,29 @@ class FarmerAvatarIllustration extends StatelessWidget {
     this.size = 64,
     this.withTablet = false,
     this.customImagePath,
+    this.userName,
     this.showEditBadge = false,
   });
 
+  bool _isDataUri(String? path) {
+    if (path == null) return false;
+    return path.trim().startsWith('data:image/');
+  }
+
+  Uint8List? _decodeDataUri(String path) {
+    try {
+      final commaIdx = path.indexOf(',');
+      if (commaIdx == -1) return null;
+      return UriData.parse(path).contentAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool _hasValidFile(String? path) {
-    if (kIsWeb || path == null || path.trim().isEmpty) return false;
+    if (path == null || path.trim().isEmpty) return false;
+    if (_isDataUri(path)) return true;
+    if (kIsWeb) return false;
     try {
       return File(path).existsSync();
     } catch (_) {
@@ -332,9 +351,53 @@ class FarmerAvatarIllustration extends StatelessWidget {
     }
   }
 
+  String _extractInitials(String? rawName) {
+    final cleaned = (rawName ?? '').trim();
+    if (cleaned.isEmpty) return '';
+    final parts = cleaned
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return '${parts.first.substring(0, 1)}${parts[1].substring(0, 1)}'
+        .toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasCustomPhoto = _hasValidFile(customImagePath);
+    final dataBytes =
+        hasCustomPhoto && _isDataUri(customImagePath)
+        ? _decodeDataUri(customImagePath!)
+        : null;
+
+    Widget innerContent;
+    if (dataBytes != null) {
+      innerContent = ClipOval(
+        child: Image.memory(
+          dataBytes,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _buildCleanUserPlaceholder(),
+        ),
+      );
+    } else if (hasCustomPhoto && !kIsWeb) {
+      innerContent = ClipOval(
+        child: Image.file(
+          File(customImagePath!),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _buildCleanUserPlaceholder(),
+        ),
+      );
+    } else {
+      innerContent = _buildCleanUserPlaceholder();
+    }
 
     final avatarCircle = Container(
       width: size,
@@ -342,30 +405,20 @@ class FarmerAvatarIllustration extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: const LinearGradient(
-          colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          colors: [AppTheme.primaryDarkGreen, AppTheme.leafGreen],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        border: Border.all(color: AppTheme.cornYellow, width: 2.2),
+        border: Border.all(color: Colors.white, width: 2.4),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: AppTheme.primaryDarkGreen.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: hasCustomPhoto
-          ? ClipOval(
-              child: Image.file(
-                File(customImagePath!),
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _buildDefaultFarmerStack(),
-              ),
-            )
-          : _buildDefaultFarmerStack(),
+      child: innerContent,
     );
 
     if (!showEditBadge) return avatarCircle;
@@ -376,13 +429,13 @@ class FarmerAvatarIllustration extends StatelessWidget {
       children: [
         avatarCircle,
         Positioned(
-          right: 0,
-          bottom: 0,
+          right: -2,
+          bottom: -2,
           child: Container(
             width: badgeSize,
             height: badgeSize,
             decoration: BoxDecoration(
-              color: AppTheme.primaryDarkGreen,
+              color: AppTheme.cornYellow,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
@@ -395,7 +448,7 @@ class FarmerAvatarIllustration extends StatelessWidget {
             ),
             child: Icon(
               Icons.camera_alt_rounded,
-              color: Colors.white,
+              color: AppTheme.primaryDarkGreen,
               size: badgeSize * 0.54,
             ),
           ),
@@ -404,76 +457,28 @@ class FarmerAvatarIllustration extends StatelessWidget {
     );
   }
 
-  Widget _buildDefaultFarmerStack() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Bahu / Kemeja Hijau Petani
-        Positioned(
-          bottom: size * 0.04,
-          child: Container(
-            width: size * 0.68,
-            height: size * 0.34,
-            decoration: BoxDecoration(
-              color: AppTheme.leafGreen,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(size * 0.25),
-              ),
-            ),
+  Widget _buildCleanUserPlaceholder() {
+    final initials = _extractInitials(userName);
+    if (initials.isNotEmpty) {
+      return Center(
+        child: Text(
+          initials,
+          style: TextStyle(
+            fontFamily: AppTheme.headingFont,
+            fontSize: size * 0.36,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            letterSpacing: 0.5,
           ),
         ),
-        // Wajah Petani
-        Positioned(
-          top: size * 0.26,
-          child: Container(
-            width: size * 0.34,
-            height: size * 0.36,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE0AC69),
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-        // Topi Caping / Topi Jerami Kuning Petani
-        Positioned(
-          top: size * 0.14,
-          child: Container(
-            width: size * 0.62,
-            height: size * 0.14,
-            decoration: BoxDecoration(
-              color: AppTheme.cornYellow,
-              borderRadius: BorderRadius.circular(size * 0.1),
-            ),
-          ),
-        ),
-        Positioned(
-          top: size * 0.06,
-          child: Container(
-            width: size * 0.36,
-            height: size * 0.14,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD97706),
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(size * 0.12),
-              ),
-            ),
-          ),
-        ),
-        if (withTablet)
-          Positioned(
-            bottom: size * 0.10,
-            right: size * 0.14,
-            child: Container(
-              width: size * 0.26,
-              height: size * 0.20,
-              decoration: BoxDecoration(
-                color: const Color(0xFF263238),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.white, width: 1),
-              ),
-            ),
-          ),
-      ],
+      );
+    }
+    return Center(
+      child: Icon(
+        Icons.person_rounded,
+        color: Colors.white,
+        size: size * 0.52,
+      ),
     );
   }
 }

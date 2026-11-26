@@ -9,8 +9,12 @@ import '../widgets/tanijagung_widgets.dart';
 import '../widgets/ui_kit.dart';
 import 'expenses_screen.dart';
 import 'harvest_input_screen.dart';
+import 'inventory_screen.dart';
 import 'plots_screen.dart';
+import 'profit_simulation_screen.dart';
+import 'reports_screen.dart';
 import 'scheduled_reminders_screen.dart';
+import 'seed_fertilizer_screen.dart';
 
 /// =====================================================================
 /// BERANDA (Tahap 3 Redesain — Modern, Hidup, Premium)
@@ -142,6 +146,7 @@ class HomeScreen extends StatelessWidget {
                             child: FarmerAvatarIllustration(
                               size: 48,
                               customImagePath: user.profilePhotoPath,
+                              userName: user.name,
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),
@@ -635,29 +640,83 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.lg),
 
-                    // 4. Akses Cepat (Tambah Lahan, Pengeluaran, Input Panen)
+                    // 4. Akses Cepat (Horizontal Scroll Navigation untuk Semua Fitur Operasional)
                     StaggeredEntrance(
                       index: 3,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SectionHeader(title: 'Akses Cepat'),
-                          const SizedBox(height: AppSpacing.sm),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Expanded(
-                                child: _QuickActionBtn(
+                              const Expanded(
+                                child: SectionHeader(title: 'Akses Cepat'),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Geser',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: colors.textSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    Icons.swipe_rounded,
+                                    size: 15,
+                                    color: colors.textSecondary,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            clipBehavior: Clip.none,
+                            child: Row(
+                              children: [
+                                _QuickActionBtn(
                                   icon: Icons.add_location_alt_outlined,
                                   label: 'Tambah Lahan',
+                                  subtitle: 'Input lahan baru',
                                   onTap: () =>
                                       AppFormDialogs.showPlotForm(context),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _QuickActionBtn(
+                                const SizedBox(width: 12),
+                                _QuickActionBtn(
+                                  icon: Icons.grain_rounded,
+                                  label: 'Benih & Pupuk',
+                                  subtitle: 'Catat pemakaian',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const SeedFertilizerScreen(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                _QuickActionBtn(
+                                  icon: Icons.inventory_2_outlined,
+                                  label: 'Stok Pupuk',
+                                  subtitle: 'Cek sisa stok',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const InventoryScreen(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                _QuickActionBtn(
                                   icon: Icons.receipt_long_outlined,
                                   label: 'Pengeluaran',
+                                  subtitle: 'Biaya usaha tani',
                                   onTap: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -665,12 +724,11 @@ class HomeScreen extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _QuickActionBtn(
+                                const SizedBox(width: 12),
+                                _QuickActionBtn(
                                   icon: Icons.scale_outlined,
                                   label: 'Input Panen',
+                                  subtitle: 'Hasil & jual panen',
                                   onTap: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -679,8 +737,33 @@ class HomeScreen extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                _QuickActionBtn(
+                                  icon: Icons.calculate_outlined,
+                                  label: 'Simulasi Untung',
+                                  subtitle: 'Hitung laba/impas',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ProfitSimulationScreen(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                _QuickActionBtn(
+                                  icon: Icons.picture_as_pdf_outlined,
+                                  label: 'Laporan PDF',
+                                  subtitle: 'Riwayat & ekspor',
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const ReportsScreen(),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -1031,47 +1114,65 @@ class _UpcomingScheduleItem {
 class _QuickActionBtn extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? subtitle;
   final VoidCallback onTap;
 
   const _QuickActionBtn({
     required this.icon,
     required this.label,
+    this.subtitle,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    return SoftCard(
-      radius: AppRadius.lg,
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: colors.accentTint,
-              borderRadius: BorderRadius.circular(14),
+    return SizedBox(
+      width: 132,
+      child: SoftCard(
+        radius: AppRadius.lg,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: colors.accentTint,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: AppTheme.darkGreen, size: 22),
             ),
-            child: Icon(icon, color: AppTheme.darkGreen, size: 22),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: AppTheme.headingFont,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: colors.textPrimary,
+            const SizedBox(height: 12),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: AppTheme.headingFont,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: colors.textPrimary,
+              ),
             ),
-          ),
-        ],
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

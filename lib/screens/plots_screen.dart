@@ -12,7 +12,6 @@ import '../widgets/tanijagung_widgets.dart';
 import '../widgets/ui_kit.dart';
 import 'expenses_screen.dart';
 import 'harvest_input_screen.dart';
-import 'seed_fertilizer_screen.dart';
 
 /// HALAMAN 5: LAHAN & TANAMAN (Sesuai Gambar Referensi Kolom 5 Baris 1)
 /// - Judul "Lahan & Tanaman"
@@ -60,17 +59,14 @@ class PlotsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
 
                 if (plots.isEmpty)
-                  SoftCard(
+                  const SoftCard(
                     radius: AppRadius.xl,
                     child: Column(
                       children: [
                         CornEmptyState(
                           title: 'Belum Ada Data Lahan',
-                          message: 'Tambahkan lahan pertanian jagung Anda beserta luas (m² atau hektare) untuk mulai mencatat musim tanam.',
-                          actionLabel: 'Muat Data Contoh',
-                          actionIcon: Icons.auto_awesome_outlined,
-                          onAction: () =>
-                              service.seedLabeledDemoDataForCurrentUser(),
+                          message:
+                              'Tambahkan lahan pertanian jagung Anda beserta luas (m² atau hektare) untuk mulai mencatat musim tanam.',
                         ),
                       ],
                     ),
@@ -847,23 +843,9 @@ class CycleDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // Pintasan Operasional Musim Tanam Ini
+              // Pintasan Operasional Musim Tanam Ini (Tanpa Benih & Pupuk)
               Row(
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              SeedFertilizerScreen(initialCycleId: cycle.id),
-                        ),
-                      ),
-                      icon: const Icon(Icons.grain_rounded, size: 18),
-                      label: const Text('Benih & Pupuk'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.push(
@@ -877,22 +859,21 @@ class CycleDetailScreen extends StatelessWidget {
                       label: const Text('Pengeluaran'),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          HarvestInputScreen(initialCycleId: cycle.id),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              HarvestInputScreen(initialCycleId: cycle.id),
+                        ),
+                      ),
+                      icon: const Icon(Icons.scale_outlined, size: 18),
+                      label: const Text('Input Hasil Panen'),
                     ),
                   ),
-                  icon: const Icon(Icons.scale_outlined, size: 18),
-                  label: const Text('Input Hasil Panen'),
-                ),
+                ],
               ),
               const SizedBox(height: 18),
 

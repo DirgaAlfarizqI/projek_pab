@@ -285,16 +285,6 @@ class AppFormDialogs {
     final varietyCtrl = TextEditingController(
       text: existingCycle?.cornVariety ?? '',
     );
-    final targetYieldCtrl = TextEditingController(
-      text: existingCycle?.targetYieldTons != null
-          ? existingCycle!.targetYieldTons.toString()
-          : '',
-    );
-    final capitalCtrl = TextEditingController(
-      text: existingCycle != null && existingCycle.initialCapital > 0
-          ? existingCycle.initialCapital.round().toString()
-          : '',
-    );
     final notesCtrl = TextEditingController(text: existingCycle?.notes ?? '');
 
     DateTime plantingDate = existingCycle?.plantingDate ?? DateTime.now();
@@ -584,54 +574,6 @@ class AppFormDialogs {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: targetYieldCtrl,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              decoration: const InputDecoration(
-                                labelText: 'Target Panen (Ton)',
-                                hintText: 'Opsional',
-                              ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return null;
-                                if (AppFormatters.parsePositiveDouble(v) ==
-                                    null) {
-                                  return 'Harus > 0';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextFormField(
-                              controller: capitalCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Modal Awal (Rp)',
-                                hintText: 'Opsional',
-                              ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return null;
-                                if (AppFormatters.parsePositiveDouble(
-                                      v,
-                                      allowZero: true,
-                                    ) ==
-                                    null) {
-                                  return 'Tidak valid';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
                       TextFormField(
                         controller: notesCtrl,
                         maxLines: 2,
@@ -645,16 +587,6 @@ class AppFormDialogs {
                         child: ElevatedButton.icon(
                           onPressed: () async {
                             if (!formKey.currentState!.validate()) return;
-                            final targetTons =
-                                AppFormatters.parsePositiveDouble(
-                                  targetYieldCtrl.text,
-                                );
-                            final initCap =
-                                AppFormatters.parsePositiveDouble(
-                                  capitalCtrl.text,
-                                  allowZero: true,
-                                ) ??
-                                0.0;
 
                             if (existingCycle == null) {
                               final created = await service.addPlantingCycle(
@@ -665,8 +597,6 @@ class AppFormDialogs {
                                 estimatedHarvestDate: estimatedHarvestDate,
                                 actualHarvestDate: actualHarvestDate,
                                 status: status,
-                                targetYieldTons: targetTons,
-                                initialCapital: initCap,
                                 notes: notesCtrl.text,
                               );
                               if (ctx.mounted) Navigator.pop(ctx, created);
@@ -681,8 +611,6 @@ class AppFormDialogs {
                                 clearActualHarvestDate:
                                     actualHarvestDate == null,
                                 status: status,
-                                targetYieldTons: targetTons,
-                                initialCapital: initCap,
                                 notes: notesCtrl.text.trim(),
                                 isDemo: false,
                               );
